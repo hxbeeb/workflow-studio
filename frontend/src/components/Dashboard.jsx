@@ -68,6 +68,7 @@ const Dashboard = () => {
         item.id === editingItem.id ? updatedItem : item
       ));
       setEditingItem(null);
+      setShowForm(false); // Close the form after successful update
     } catch (error) {
       console.error('Error updating item:', error);
       alert('Failed to update item. Please try again.');
@@ -93,6 +94,20 @@ const Dashboard = () => {
     setShowForm(false);
     setEditingItem(null);
   };
+
+  // Handle escape key to close modal
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && showForm) {
+        handleCancelForm();
+      }
+    };
+
+    if (showForm) {
+      document.addEventListener('keydown', handleEscape);
+      return () => document.removeEventListener('keydown', handleEscape);
+    }
+  }, [showForm]);
 
   const getFilteredItems = () => {
     return items;
@@ -149,8 +164,14 @@ const Dashboard = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Form Modal */}
         {showForm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+            onClick={handleCancelForm}
+          >
+            <div 
+              className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
               <ItemForm
                 onSubmit={editingItem ? handleUpdateItem : handleCreateItem}
                 initialData={editingItem}
