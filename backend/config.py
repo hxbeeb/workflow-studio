@@ -17,6 +17,9 @@ class Config:
     # Database
     DATABASE_URL = os.getenv("DATABASE_URL") or "sqlite:///./workflow.db"
 
+    # Clerk Authentication
+    CLERK_SECRET_KEY = os.getenv("CLERK_SECRET_KEY")
+
     # ChromaDB Configuration
     CHROMA_API_KEY = os.getenv("CHROMA_API_KEY")
     CHROMA_HOST = os.getenv("CHROMA_HOST")

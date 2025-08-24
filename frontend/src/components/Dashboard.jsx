@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useUser, useClerk } from '@clerk/clerk-react';
+import { useUser, useClerk, useAuth } from '@clerk/clerk-react';
 import { useLocation, Link } from 'react-router-dom';
 import ItemCard from './ItemCard';
 import ItemForm from './ItemForm';
@@ -8,6 +8,7 @@ import { itemsAPI } from '../services/api';
 const Dashboard = () => {
   const { user } = useUser();
   const { signOut } = useClerk();
+  const { getToken } = useAuth();
   const location = useLocation();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -20,7 +21,16 @@ const Dashboard = () => {
     console.log('Dashboard: User object:', user);
     console.log('Dashboard: User ID:', user?.id);
     console.log('Dashboard: User email:', user?.emailAddresses?.[0]?.emailAddress);
-  }, [user]);
+    
+    // Debug session information
+    if (user && getToken) {
+      getToken().then(token => {
+        console.log('Dashboard: Token:', token ? `${token.substring(0, 20)}...` : 'null');
+      }).catch(e => {
+        console.log('Dashboard: getToken() failed:', e);
+      });
+    }
+  }, [user, getToken]);
 
   // Fetch items on component mount
   useEffect(() => {
@@ -36,7 +46,7 @@ const Dashboard = () => {
     try {
       console.log('Dashboard: Fetching items...');
       setLoading(true);
-      const data = await itemsAPI.getAll();
+      const data = await itemsAPI.getAll(user, getToken);
       console.log('Dashboard: Items received:', data);
       setItems(data);
       setError(null);
@@ -51,7 +61,7 @@ const Dashboard = () => {
   const handleCreateItem = async (itemData) => {
     try {
       console.log('Dashboard: Creating item with data:', itemData);
-      const newItem = await itemsAPI.create(itemData);
+      const newItem = await itemsAPI.create(user, itemData, getToken);
       console.log('Dashboard: Item created successfully:', newItem);
       setItems(prev => [newItem, ...prev]);
       setShowForm(false);
@@ -63,7 +73,7 @@ const Dashboard = () => {
 
   const handleUpdateItem = async (itemData) => {
     try {
-      const updatedItem = await itemsAPI.update(editingItem.id, itemData);
+      const updatedItem = await itemsAPI.update(user, editingItem.id, itemData, getToken);
       setItems(prev => prev.map(item => 
         item.id === editingItem.id ? updatedItem : item
       ));
@@ -77,7 +87,7 @@ const Dashboard = () => {
 
   const handleDeleteItem = async (itemId) => {
     try {
-      await itemsAPI.delete(itemId);
+      await itemsAPI.delete(user, itemId, getToken);
       setItems(prev => prev.filter(item => item.id !== itemId));
     } catch (error) {
       console.error('Error deleting item:', error);
@@ -131,7 +141,7 @@ const Dashboard = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">AI Planet Dashboard</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Workflow Studio Dashboard</h1>
               <p className="text-sm text-gray-600">
                 Welcome back, {user.firstName || user.emailAddresses?.[0]?.emailAddress}!
               </p>

@@ -1,6 +1,7 @@
-from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File, Form, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime
@@ -8,13 +9,68 @@ import uuid
 import os
 import shutil
 from sqlalchemy.orm import Session
+import clerk
+import base64
+import json
+import jwt
+import requests
+from jose import jwt as jose_jwt
 
 # Import our modules
+from config import Config
 from database import get_db, create_tables, Item, Workflow, Conversation, Document
 from services.ai_service import document_processor, vector_store, workflow_engine
 from chroma_connection import get_chroma_collection
 
-app = FastAPI(title="AI Planet API", version="1.0.0")
+app = FastAPI(title="Workflow Studio API", version="1.0.0")
+
+# Initialize Clerk
+if Config.CLERK_SECRET_KEY:
+    clerk_client = clerk.Client(Config.CLERK_SECRET_KEY) # Fixed Client init
+else:
+    print("Warning: CLERK_SECRET_KEY not set. Authentication will not work properly.")
+    clerk_client = None
+
+# Clerk JWT verification setup
+CLERK_ISSUER = "https://immense-coyote-93.clerk.accounts.dev"  # From your Clerk domain
+CLERK_JWKS_URL = f"{CLERK_ISSUER}/.well-known/jwks.json"
+
+# Cache JWKS
+try:
+    jwks = requests.get(CLERK_JWKS_URL).json()
+    print("DEBUG: Successfully loaded Clerk JWKS")
+except Exception as e:
+    print(f"Warning: Failed to load Clerk JWKS: {e}")
+    jwks = {"keys": []}
+
+def verify_clerk_token(token: str):
+    """Verify Clerk JWT token using JWKS"""
+    try:
+        # Get the header to find the key ID
+        header = jose_jwt.get_unverified_header(token)
+        key = None
+        
+        # Find the matching key
+        for jwk in jwks["keys"]:
+            if jwk["kid"] == header["kid"]:
+                key = jwk
+                break
+                
+        if not key:
+            raise HTTPException(status_code=401, detail="Invalid token - no matching key")
+        
+        # Decode and verify the token
+        payload = jose_jwt.decode(
+            token, 
+            key, 
+            algorithms=["RS256"], 
+            audience="http://localhost:5173"  # Your frontend URL
+        )
+        
+        return payload
+    except Exception as e:
+        print(f"Token verification failed: {e}")
+        raise HTTPException(status_code=401, detail="Token verification failed")
 
 # Add CORS middleware
 app.add_middleware(
@@ -50,9 +106,14 @@ class ItemUpdate(BaseModel):
     priority: Optional[str] = None
     type: Optional[str] = None
 
-class ItemResponse(ItemBase):
+class ItemResponse(BaseModel):
     id: str
     user_id: str
+    title: str
+    description: Optional[str] = None
+    status: str
+    priority: str
+    type: str
     created_at: datetime
     updated_at: datetime
 
@@ -99,17 +160,75 @@ class QueryResponse(BaseModel):
     processing_time: float
     workflow_id: str
 
-# Simple user dependency - expects user info from frontend
-async def get_current_user(
-    user_id: str = "default_user"  # Default user for simplicity
-) -> dict:
-    """Get current user from frontend headers"""
-    return {"id": user_id}
+# User dependency - extracts user info from Clerk JWT token
+async def get_current_user(request: Request) -> dict:
+    """Get current user from Clerk JWT token"""
+    try:
+        # Get the JWT token from headers
+        jwt_token = None
+        
+        # Try to get from Authorization header
+        auth_header = request.headers.get('Authorization')
+        
+        if auth_header and auth_header.startswith('Bearer '):
+            jwt_token = auth_header.split(' ')[1]
+            print(f"DEBUG: Got JWT token from Authorization header: {jwt_token[:20]}...")
+        
+        if not jwt_token:
+            print("DEBUG: No JWT token found")
+            raise HTTPException(status_code=401, detail="No JWT token provided")
+        
+        # Verify the JWT token with Clerk
+        try:
+            # Use the proper Clerk JWT verification
+            payload = verify_clerk_token(jwt_token)
+            
+            # Extract user ID from the token
+            user_id = payload.get('sub')
+            
+            if not user_id:
+                raise HTTPException(status_code=401, detail="No user ID in token")
+            
+            print(f"DEBUG: Verified user ID from JWT: {user_id}")
+            return {"id": user_id}
+            
+        except HTTPException:
+            # Re-raise HTTP exceptions
+            raise
+        except Exception as e:
+            print(f"Error verifying JWT token: {e}")
+            raise HTTPException(status_code=401, detail="Invalid JWT token")
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions (like 401)
+        raise
+    except Exception as e:
+        print(f"Error processing authentication: {e}")
+        raise HTTPException(status_code=401, detail="Authentication failed")
 
 # Routes
 @app.get("/")
 def root():
     return {"message": "Workflow Studio API is running"}
+
+@app.get("/auth/debug")
+async def debug_auth(request: Request):
+    """Debug endpoint to check authentication status"""
+    try:
+        user = await get_current_user(request)
+        return {
+            "authenticated": True,
+            "user_id": user["id"],
+            "headers": dict(request.headers),
+            "cookies": dict(request.cookies)
+        }
+    except HTTPException as e:
+        return {
+            "authenticated": False,
+            "error": str(e.detail),
+            "headers": dict(request.headers),
+            "cookies": dict(request.cookies)
+        }
 
 @app.get("/health")
 async def health_check(db: Session = Depends(get_db)):
@@ -134,7 +253,11 @@ async def health_check(db: Session = Depends(get_db)):
 @app.get("/items", response_model=List[ItemResponse])
 async def get_all_items(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get all items for the current user"""
+    print(f"DEBUG: get_all_items called with user: {current_user}")
+    print(f"DEBUG: Filtering items for user_id: {current_user['id']}")
+    
     items = db.query(Item).filter(Item.user_id == current_user["id"]).all()
+    print(f"DEBUG: Found {len(items)} items for user {current_user['id']}")
     
     # Convert SQLAlchemy objects to dictionaries, excluding _sa_instance_state
     item_dicts = []
@@ -152,6 +275,7 @@ async def get_all_items(current_user: dict = Depends(get_current_user), db: Sess
         }
         item_dicts.append(item_dict)
     
+    print(f"DEBUG: Returning {len(item_dicts)} items")
     return item_dicts
 
 @app.post("/items", response_model=ItemResponse, status_code=status.HTTP_201_CREATED)

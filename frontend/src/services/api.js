@@ -2,48 +2,123 @@ import axios from 'axios';
 
 // const API_BASE_URL = 'http://localhost:8000';
 const API_BASE_URL = 'http://localhost:8000';
-// Create axios instance
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
 
-// Helper function to get user headers from Clerk user
-export const getUserHeaders = (user) => {
-  if (!user) {
-    console.log('No user provided to getUserHeaders');
+// Helper function to get auth headers from Clerk user
+export const getAuthHeaders = async (user, getToken) => {
+  console.log('getAuthHeaders called with user:', user);
+  
+  if (!user || !getToken) {
+    console.log('No user or getToken provided to getAuthHeaders');
     return {};
   }
   
-  const headers = {
-    'X-User-ID': user.id,
-    'X-User-Email': user.emailAddresses?.[0]?.emailAddress || '',
-    'X-User-First-Name': user.firstName || '',
-    'X-User-Last-Name': user.lastName || '',
-    'X-User-Image-URL': user.imageUrl || '',
-  };
-  
-  console.log('Generated headers:', headers);
-  return headers;
+  try {
+    // Get the JWT token from Clerk using the correct method
+    console.log('Getting JWT token from user...');
+    
+    const token = await getToken();
+    console.log('JWT token from getToken():', token ? `${token.substring(0, 20)}...` : 'null');
+    
+    if (!token) {
+      console.log('No JWT token available, user might not be fully authenticated');
+      return {};
+    }
+    
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    };
+    
+    console.log('Generated auth headers:', { 'Authorization': `Bearer ${token ? token.substring(0, 20) + '...' : 'null'}` });
+    return headers;
+  } catch (error) {
+    console.error('Error getting JWT token:', error);
+    return {};
+  }
+};
+
+// Helper function to handle authentication errors
+const handleAuthError = () => {
+  console.log('Authentication failed, redirecting to auth page');
+  // Redirect to auth page
+  window.location.href = '/auth';
 };
 
 // Items API
 export const itemsAPI = {
-  getAll: () => fetch(`${API_BASE_URL}/items`).then(res => res.json()),
-  getById: (id) => fetch(`${API_BASE_URL}/items/${id}`).then(res => res.json()),
-  create: (item) => fetch(`${API_BASE_URL}/items`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(item)
-  }).then(res => res.json()),
-  update: (id, item) => fetch(`${API_BASE_URL}/items/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(item)
-  }).then(res => res.json()),
-  delete: (id) => fetch(`${API_BASE_URL}/items/${id}`, { method: 'DELETE' })
+  getAll: async (user, getToken) => {
+    console.log('itemsAPI.getAll called with user:', user);
+    const headers = await getAuthHeaders(user, getToken);
+    console.log('Final headers for getAll:', headers);
+    
+    const response = await fetch(`${API_BASE_URL}/items`, {
+      headers
+    });
+    
+    if (response.status === 401) {
+      handleAuthError();
+      throw new Error('Authentication required');
+    }
+    
+    return response.json();
+  },
+  getById: async (user, id, getToken) => {
+    const headers = await getAuthHeaders(user, getToken);
+    const response = await fetch(`${API_BASE_URL}/items/${id}`, {
+      headers
+    });
+    
+    if (response.status === 401) {
+      handleAuthError();
+      throw new Error('Authentication required');
+    }
+    
+    return response.json();
+  },
+  create: async (user, item, getToken) => {
+    const headers = await getAuthHeaders(user, getToken);
+    const response = await fetch(`${API_BASE_URL}/items`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(item)
+    });
+    
+    if (response.status === 401) {
+      handleAuthError();
+      throw new Error('Authentication required');
+    }
+    
+    return response.json();
+  },
+  update: async (user, id, item, getToken) => {
+    const headers = await getAuthHeaders(user, getToken);
+    const response = await fetch(`${API_BASE_URL}/items/${id}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(item)
+    });
+    
+    if (response.status === 401) {
+      handleAuthError();
+      throw new Error('Authentication required');
+    }
+    
+    return response.json();
+  },
+  delete: async (user, id, getToken) => {
+    const headers = await getAuthHeaders(user, getToken);
+    const response = await fetch(`${API_BASE_URL}/items/${id}`, {
+      method: 'DELETE',
+      headers
+    });
+    
+    if (response.status === 401) {
+      handleAuthError();
+      throw new Error('Authentication required');
+    }
+    
+    return response;
+  }
 };
 
 // Workflows API
