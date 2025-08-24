@@ -4,6 +4,8 @@ const ChromaDBViewer = () => {
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [deletingCollections, setDeletingCollections] = useState(new Set());
+  const [notification, setNotification] = useState(null);
 
   const fetchDashboardData = async () => {
     setLoading(true);
@@ -24,6 +26,9 @@ const ChromaDBViewer = () => {
       return;
     }
     
+    // Add to deleting set
+    setDeletingCollections(prev => new Set(prev).add(collectionName));
+    
     try {
       const response = await fetch(`http://localhost:8000/chroma-collections/${collectionName}`, {
         method: 'DELETE'
@@ -31,19 +36,36 @@ const ChromaDBViewer = () => {
       const result = await response.json();
       
       if (result.success) {
-        alert(`Collection '${collectionName}' deleted successfully`);
+        setNotification({ type: 'success', message: `Collection '${collectionName}' deleted successfully` });
         fetchDashboardData(); // Refresh the data
       } else {
-        alert(`Failed to delete collection: ${result.error}`);
+        setNotification({ type: 'error', message: `Failed to delete collection: ${result.error}` });
       }
     } catch (err) {
-      alert(`Error deleting collection: ${err.message}`);
+      setNotification({ type: 'error', message: `Error deleting collection: ${err.message}` });
+    } finally {
+      // Remove from deleting set
+      setDeletingCollections(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(collectionName);
+        return newSet;
+      });
     }
   };
 
   useEffect(() => {
     fetchDashboardData();
   }, []);
+
+  // Auto-dismiss notifications after 5 seconds
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => {
+        setNotification(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
 
   if (loading) {
     return (
@@ -69,14 +91,53 @@ const ChromaDBViewer = () => {
 
   return (
     <div className="p-4 max-w-6xl mx-auto">
+      {/* Notification */}
+      {notification && (
+        <div className={`mb-4 p-4 rounded-lg ${
+          notification.type === 'success' 
+            ? 'bg-green-100 border border-green-400 text-green-700' 
+            : 'bg-red-100 border border-red-400 text-red-700'
+        }`}>
+          <div className="flex items-center justify-between">
+            <span>{notification.message}</span>
+            <button 
+              onClick={() => setNotification(null)}
+              className="ml-4 text-lg font-bold hover:opacity-70"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">ChromaDB Dashboard</h1>
-        <button 
-          onClick={fetchDashboardData}
-          className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
-        >
-          🔄 Refresh
-        </button>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">ChromaDB Dashboard</h1>
+          {dashboardData?.collections && (
+            <p className="text-sm text-gray-600 mt-1">
+              {dashboardData.collections.length} collection{dashboardData.collections.length !== 1 ? 's' : ''} found
+            </p>
+          )}
+        </div>
+        <div className="flex items-center space-x-2">
+          {dashboardData?.collections?.length > 0 && (
+            <button 
+              onClick={() => {
+                if (confirm(`Are you sure you want to delete ALL ${dashboardData.collections.length} collections? This action cannot be undone.`)) {
+                  Promise.all(dashboardData.collections.map(col => deleteCollection(col.name)));
+                }
+              }}
+              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+            >
+              🗑️ Delete All Collections
+            </button>
+          )}
+          <button 
+            onClick={fetchDashboardData}
+            className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+          >
+            🔄 Refresh
+          </button>
+        </div>
       </div>
 
       {dashboardData?.collections?.length === 0 ? (
@@ -95,15 +156,18 @@ const ChromaDBViewer = () => {
                    <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
                      {collection.count || 0} documents
                    </span>
-                   {collection.name === 'my_collection' && (
-                     <button
-                       onClick={() => deleteCollection(collection.name)}
-                       className="px-3 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600"
-                       title="Delete this collection (contains old Invoice documents)"
-                     >
-                       🗑️ Delete
-                     </button>
-                   )}
+                   <button
+                     onClick={() => deleteCollection(collection.name)}
+                     disabled={deletingCollections.has(collection.name)}
+                     className={`px-3 py-1 rounded text-sm transition-colors ${
+                       deletingCollections.has(collection.name)
+                         ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                         : 'bg-red-500 text-white hover:bg-red-600'
+                     }`}
+                     title={`Delete collection '${collection.name}'`}
+                   >
+                     {deletingCollections.has(collection.name) ? '⏳ Deleting...' : '🗑️ Delete'}
+                   </button>
                  </div>
                </div>
 

@@ -76,7 +76,7 @@ class WorkflowUpdate(BaseModel):
 class WorkflowResponse(WorkflowCreate):
     id: str
     user_id: str
-    item_id: str
+    item_id: Optional[str] = None  # Allow None for item_id
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -109,7 +109,26 @@ async def get_current_user(
 # Routes
 @app.get("/")
 def root():
-    return {"message": "AI Planet API is running"}
+    return {"message": "Workflow Studio API is running"}
+
+@app.get("/health")
+async def health_check(db: Session = Depends(get_db)):
+    """Health check endpoint to test database connection"""
+    try:
+        # Test database connection
+        db.execute("SELECT 1")
+        return {
+            "status": "healthy",
+            "database": "connected",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "database": "disconnected",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }
 
 # Items CRUD
 @app.get("/items", response_model=List[ItemResponse])

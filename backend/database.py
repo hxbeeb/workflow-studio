@@ -8,7 +8,20 @@ from config import Config
 # Database configuration - Use PostgreSQL
 DATABASE_URL = Config.DATABASE_URL
 
-engine = create_engine(DATABASE_URL)
+# Add SSL configuration for PostgreSQL
+if DATABASE_URL and DATABASE_URL.startswith('postgresql'):
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={
+            "sslmode": "require" if "localhost" not in DATABASE_URL else "prefer"
+        },
+        pool_size=10,
+        max_overflow=20,
+        pool_pre_ping=True,  # Verify connections before use
+        pool_recycle=3600    # Recycle connections every hour
+    )
+else:
+    engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -86,6 +99,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+    except Exception as e:
+        print(f"Database error: {e}")
+        db.rollback()
+        raise
     finally:
         db.close()
 

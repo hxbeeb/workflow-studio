@@ -14,12 +14,8 @@ _collection = None
 def get_chroma_client():
     global _client
     if _client is None:
-        from chromadb.config import Settings
         from config import Config
-        _client = chromadb.Client(Settings(
-            persist_directory=Config.CHROMA_LOCAL_PATH,
-            chroma_db_impl="duckdb+parquet"
-        ))
+        _client = chromadb.PersistentClient(path=Config.CHROMA_LOCAL_PATH)
     return _client
 
 def get_chroma_collection(client = Depends(get_chroma_client)):

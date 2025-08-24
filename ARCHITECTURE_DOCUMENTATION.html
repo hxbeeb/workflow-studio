@@ -1,0 +1,834 @@
+
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Workflow Studio - Complete Architecture Documentation</title>
+        
+    <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+    h2 { color: #34495e; border-bottom: 1px solid #bdc3c7; padding-bottom: 5px; }
+    h3 { color: #7f8c8d; }
+    h4 { color: #95a5a6; }
+    code { background-color: #f8f9fa; padding: 2px 4px; border-radius: 3px; font-family: 'Courier New', monospace; }
+    pre { background-color: #f8f9fa; padding: 15px; border-radius: 5px; overflow-x: auto; }
+    pre code { background-color: transparent; padding: 0; }
+    table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background-color: #f2f2f2; font-weight: bold; }
+    blockquote { border-left: 4px solid #3498db; margin: 0; padding-left: 15px; color: #7f8c8d; }
+    .emoji { font-size: 1.2em; }
+    </style>
+    
+    </head>
+    <body>
+        <h1 id="workflow-studio-complete-architecture-documentation">Workflow Studio - Complete Architecture Documentation</h1>
+<h2 id="system-overview">🏗️ System Overview</h2>
+<p>Workflow Studio is a comprehensive AI workflow management platform that combines task management, visual workflow building, document processing, and multi-LLM AI integration. The system follows a modern client-server architecture with a React frontend and FastAPI backend.</p>
+<h2 id="table-of-contents">📋 Table of Contents</h2>
+<ol>
+<li><a href="#system-architecture">System Architecture</a></li>
+<li><a href="#backend-architecture">Backend Architecture</a></li>
+<li><a href="#frontend-architecture">Frontend Architecture</a></li>
+<li><a href="#database-design">Database Design</a></li>
+<li><a href="#ai-services-architecture">AI Services Architecture</a></li>
+<li><a href="#workflow-engine">Workflow Engine</a></li>
+<li><a href="#vector-database-integration">Vector Database Integration</a></li>
+<li><a href="#authentication--security">Authentication &amp; Security</a></li>
+<li><a href="#api-design">API Design</a></li>
+<li><a href="#component-interactions">Component Interactions</a></li>
+<li><a href="#data-flow">Data Flow</a></li>
+<li><a href="#deployment-architecture">Deployment Architecture</a></li>
+<li><a href="#detailed-component-documentation">Detailed Component Documentation</a></li>
+</ol>
+<hr />
+<h2 id="system-architecture">🏛️ System Architecture</h2>
+<h3 id="high-level-architecture-diagram">High-Level Architecture Diagram</h3>
+<div class="codehilite"><pre><span></span><code>┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Frontend      │    │    Backend      │    │   External      │
+│   (React)       │◄──►│   (FastAPI)     │◄──►│   Services      │
+│                 │    │                 │    │                 │
+│ • Dashboard     │    │ • REST API      │    │ • OpenAI API    │
+│ • Workflow      │    │ • Workflow      │    │ • Gemini API    │
+│   Builder       │    │   Engine        │    │ • Claude API    │
+│ • Chat          │    │ • Document      │    │ • SerpAPI       │
+│   Interface     │    │   Processor     │    │ • Clerk Auth    │
+│ • ChromaDB      │    │ • Vector Store  │    │                 │
+│   Viewer        │    │ • Database      │    │                 │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                              │
+                              ▼
+                       ┌─────────────────┐
+                       │   Database      │
+                       │   Layer         │
+                       │                 │
+                       │ • PostgreSQL    │
+                       │ • ChromaDB      │
+                       │ • File Storage  │
+                       └─────────────────┘
+</code></pre></div>
+
+<h3 id="technology-stack">Technology Stack</h3>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Technology</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Frontend</strong></td>
+<td>React 19, React Flow, Tailwind CSS</td>
+<td>User interface and workflow visualization</td>
+</tr>
+<tr>
+<td><strong>Backend</strong></td>
+<td>FastAPI, Python 3.8+</td>
+<td>API server and business logic</td>
+</tr>
+<tr>
+<td><strong>Database</strong></td>
+<td>PostgreSQL, ChromaDB</td>
+<td>Data persistence and vector storage</td>
+</tr>
+<tr>
+<td><strong>Authentication</strong></td>
+<td>Clerk</td>
+<td>User authentication and management</td>
+</tr>
+<tr>
+<td><strong>AI Services</strong></td>
+<td>OpenAI, Google Gemini, Anthropic</td>
+<td>Large language model integration</td>
+</tr>
+<tr>
+<td><strong>Vector DB</strong></td>
+<td>ChromaDB</td>
+<td>Document embeddings and similarity search</td>
+</tr>
+<tr>
+<td><strong>Build Tools</strong></td>
+<td>Vite, pip</td>
+<td>Development and build tooling</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="backend-architecture">🔧 Backend Architecture</h2>
+<h3 id="core-components">Core Components</h3>
+<h4 id="1-main-application-mainpy">1. <strong>Main Application (<code>main.py</code>)</strong></h4>
+<p><strong>Role</strong>: FastAPI application entry point and API routing<br />
+<strong>Key Responsibilities</strong>:<br />
+- REST API endpoint definitions<br />
+- Request/response handling<br />
+- CORS middleware configuration<br />
+- Static file serving<br />
+- Database session management</p>
+<p><strong>Key Endpoints</strong>:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Items Management</span>
+<span class="n">GET</span><span class="o">/</span><span class="n">POST</span> <span class="o">/</span><span class="n">items</span>                    <span class="c1"># CRUD operations for tasks/items</span>
+<span class="n">GET</span><span class="o">/</span><span class="n">PUT</span><span class="o">/</span><span class="n">DELETE</span> <span class="o">/</span><span class="n">items</span><span class="o">/</span><span class="p">{</span><span class="nb">id</span><span class="p">}</span>        <span class="c1"># Individual item operations</span>
+
+<span class="c1"># Workflow Management  </span>
+<span class="n">GET</span><span class="o">/</span><span class="n">POST</span> <span class="o">/</span><span class="n">workflows</span>               <span class="c1"># Workflow CRUD operations</span>
+<span class="n">GET</span><span class="o">/</span><span class="n">PUT</span><span class="o">/</span><span class="n">DELETE</span> <span class="o">/</span><span class="n">workflows</span><span class="o">/</span><span class="p">{</span><span class="nb">id</span><span class="p">}</span>    <span class="c1"># Individual workflow operations</span>
+
+<span class="c1"># Document Processing</span>
+<span class="n">POST</span> <span class="o">/</span><span class="n">workflows</span><span class="o">/</span><span class="p">{</span><span class="nb">id</span><span class="p">}</span><span class="o">/</span><span class="n">documents</span>     <span class="c1"># Upload and process documents</span>
+<span class="n">GET</span> <span class="o">/</span><span class="n">workflows</span><span class="o">/</span><span class="p">{</span><span class="nb">id</span><span class="p">}</span><span class="o">/</span><span class="n">documents</span>      <span class="c1"># Retrieve workflow documents</span>
+
+<span class="c1"># Workflow Execution</span>
+<span class="n">POST</span> <span class="o">/</span><span class="n">workflows</span><span class="o">/</span><span class="p">{</span><span class="nb">id</span><span class="p">}</span><span class="o">/</span><span class="n">execute</span>       <span class="c1"># Execute workflow with query</span>
+
+<span class="c1"># ChromaDB Management</span>
+<span class="n">GET</span> <span class="o">/</span><span class="n">chroma</span><span class="o">-</span><span class="n">dashboard</span>             <span class="c1"># View vector database contents</span>
+<span class="n">DELETE</span> <span class="o">/</span><span class="n">chroma</span><span class="o">-</span><span class="n">collections</span><span class="o">/</span><span class="p">{</span><span class="n">name</span><span class="p">}</span> <span class="c1"># Manage collections</span>
+</code></pre></div>
+
+<h4 id="2-database-layer-databasepy">2. <strong>Database Layer (<code>database.py</code>)</strong></h4>
+<p><strong>Role</strong>: SQLAlchemy ORM models and database configuration<br />
+<strong>Key Models</strong>:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">Item</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Task/Project items that can have workflows&quot;&quot;&quot;</span>
+    <span class="o">-</span> <span class="nb">id</span><span class="p">:</span> <span class="n">Primary</span> <span class="n">key</span>
+    <span class="o">-</span> <span class="n">user_id</span><span class="p">:</span> <span class="n">User</span> <span class="n">ownership</span>
+    <span class="o">-</span> <span class="n">title</span><span class="p">,</span> <span class="n">description</span><span class="p">,</span> <span class="n">status</span><span class="p">,</span> <span class="n">priority</span><span class="p">,</span> <span class="nb">type</span>
+    <span class="o">-</span> <span class="n">created_at</span><span class="p">,</span> <span class="n">updated_at</span> <span class="n">timestamps</span>
+    <span class="o">-</span> <span class="n">workflows</span><span class="p">:</span> <span class="n">One</span><span class="o">-</span><span class="n">to</span><span class="o">-</span><span class="n">many</span> <span class="n">relationship</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Workflow</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;AI workflows associated with items&quot;&quot;&quot;</span>
+    <span class="o">-</span> <span class="nb">id</span><span class="p">:</span> <span class="n">Primary</span> <span class="n">key</span>
+    <span class="o">-</span> <span class="n">user_id</span><span class="p">,</span> <span class="n">item_id</span><span class="p">:</span> <span class="n">Relationships</span>
+    <span class="o">-</span> <span class="n">name</span><span class="p">,</span> <span class="n">description</span><span class="p">:</span> <span class="n">Metadata</span>
+    <span class="o">-</span> <span class="n">components</span><span class="p">:</span> <span class="n">JSON</span> <span class="n">field</span> <span class="k">for</span> <span class="n">React</span> <span class="n">Flow</span> <span class="n">nodes</span><span class="o">/</span><span class="n">edges</span>
+    <span class="o">-</span> <span class="n">is_active</span><span class="p">:</span> <span class="n">Workflow</span> <span class="n">status</span>
+    <span class="o">-</span> <span class="n">conversations</span><span class="p">,</span> <span class="n">documents</span><span class="p">:</span> <span class="n">Related</span> <span class="n">entities</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Conversation</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Chat history for workflow executions&quot;&quot;&quot;</span>
+    <span class="o">-</span> <span class="n">workflow_id</span><span class="p">:</span> <span class="n">Associated</span> <span class="n">workflow</span>
+    <span class="o">-</span> <span class="n">user_query</span><span class="p">,</span> <span class="n">system_response</span><span class="p">:</span> <span class="n">Chat</span> <span class="n">content</span>
+    <span class="o">-</span> <span class="n">context_used</span><span class="p">:</span> <span class="n">Knowledge</span> <span class="n">base</span> <span class="n">context</span>
+    <span class="o">-</span> <span class="n">llm_used</span><span class="p">,</span> <span class="n">processing_time</span><span class="p">:</span> <span class="n">Execution</span> <span class="n">metadata</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Document</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Uploaded documents for knowledge base&quot;&quot;&quot;</span>
+    <span class="o">-</span> <span class="n">workflow_id</span><span class="p">:</span> <span class="n">Associated</span> <span class="n">workflow</span>
+    <span class="o">-</span> <span class="n">filename</span><span class="p">,</span> <span class="n">file_path</span><span class="p">:</span> <span class="n">File</span> <span class="n">metadata</span>
+    <span class="o">-</span> <span class="n">extracted_text</span><span class="p">:</span> <span class="n">Processed</span> <span class="n">content</span>
+    <span class="o">-</span> <span class="n">embeddings_created</span><span class="p">:</span> <span class="n">Processing</span> <span class="n">status</span>
+</code></pre></div>
+
+<h4 id="3-configuration-configpy">3. <strong>Configuration (<code>config.py</code>)</strong></h4>
+<p><strong>Role</strong>: Environment-based configuration management<br />
+<strong>Key Settings</strong>:<br />
+- Database connection strings<br />
+- ChromaDB configuration (local vs cloud)<br />
+- API keys for external services<br />
+- Environment-specific settings</p>
+<hr />
+<h2 id="frontend-architecture">🎨 Frontend Architecture</h2>
+<h3 id="core-components_1">Core Components</h3>
+<h4 id="1-application-entry-appjsx">1. <strong>Application Entry (<code>App.jsx</code>)</strong></h4>
+<p><strong>Role</strong>: Main application component with routing and authentication<br />
+<strong>Key Features</strong>:<br />
+- Clerk authentication provider<br />
+- React Router setup<br />
+- Protected route handling<br />
+- Sign-in/sign-up UI</p>
+<h4 id="2-dashboard-dashboardjsx">2. <strong>Dashboard (<code>Dashboard.jsx</code>)</strong></h4>
+<p><strong>Role</strong>: Main user interface for task management<br />
+<strong>Key Features</strong>:<br />
+- Item CRUD operations<br />
+- Statistics display<br />
+- User profile management<br />
+- Navigation to workflow builder</p>
+<h4 id="3-workflow-builder-workflowbuilderjsx">3. <strong>Workflow Builder (<code>WorkflowBuilder.jsx</code>)</strong></h4>
+<p><strong>Role</strong>: Visual workflow construction interface<br />
+<strong>Key Features</strong>:<br />
+- React Flow integration<br />
+- Drag-and-drop component placement<br />
+- Node configuration panels<br />
+- Workflow saving/loading<br />
+- Real-time chat interface</p>
+<h4 id="4-node-components">4. <strong>Node Components</strong></h4>
+<p><strong>Role</strong>: Individual workflow node implementations</p>
+<p><strong>UserQueryNode</strong>: Entry point for user questions<br />
+<strong>KnowledgeBaseNode</strong>: Document management and vector search<br />
+<strong>LLMEngineNode</strong>: AI model configuration and execution<br />
+<strong>OutputNode</strong>: Response display and chat interface</p>
+<h4 id="5-api-service-layer-apijs">5. <strong>API Service Layer (<code>api.js</code>)</strong></h4>
+<p><strong>Role</strong>: Centralized API communication<br />
+<strong>Key Services</strong>:<br />
+- Items API: Task management<br />
+- Workflows API: Workflow CRUD<br />
+- Documents API: File upload/management<br />
+- Execution API: Workflow execution</p>
+<hr />
+<h2 id="database-design">🗄️ Database Design</h2>
+<h3 id="relational-database-postgresql">Relational Database (PostgreSQL)</h3>
+<h4 id="entity-relationships">Entity Relationships</h4>
+<div class="codehilite"><pre><span></span><code>User (Clerk)
+  ↓ (1:many)
+Items
+  ↓ (1:many)
+Workflows
+  ↓ (1:many)
+├── Conversations
+└── Documents
+</code></pre></div>
+
+<h4 id="key-design-patterns">Key Design Patterns</h4>
+<ul>
+<li><strong>UUID Primary Keys</strong>: All entities use string UUIDs</li>
+<li><strong>Soft Deletes</strong>: Items marked as inactive rather than deleted</li>
+<li><strong>Audit Trail</strong>: created_at/updated_at timestamps on all entities</li>
+<li><strong>JSON Storage</strong>: Workflow components stored as JSON for flexibility</li>
+</ul>
+<h3 id="vector-database-chromadb">Vector Database (ChromaDB)</h3>
+<h4 id="collection-structure">Collection Structure</h4>
+<div class="codehilite"><pre><span></span><code><span class="n">Collection</span><span class="p">:</span><span class="w"> </span><span class="n">workflow_</span><span class="p">{</span><span class="n">workflow_id</span><span class="p">}</span>
+<span class="err">├──</span><span class="w"> </span><span class="n">Documents</span><span class="p">:</span><span class="w"> </span><span class="n">Text</span><span class="w"> </span><span class="n">chunks</span><span class="w"> </span><span class="n">from</span><span class="w"> </span><span class="n">uploaded</span><span class="w"> </span><span class="n">PDFs</span>
+<span class="err">├──</span><span class="w"> </span><span class="n">Embeddings</span><span class="p">:</span><span class="w"> </span><span class="mi">384</span><span class="o">-</span><span class="n">dimensional</span><span class="w"> </span><span class="n">vectors</span>
+<span class="err">├──</span><span class="w"> </span><span class="n">Metadata</span><span class="p">:</span><span class="w"> </span><span class="n">File</span><span class="w"> </span><span class="n">info</span><span class="p">,</span><span class="w"> </span><span class="n">workflow</span><span class="w"> </span><span class="n">association</span>
+<span class="err">└──</span><span class="w"> </span><span class="n">IDs</span><span class="p">:</span><span class="w"> </span><span class="n">Unique</span><span class="w"> </span><span class="n">document</span><span class="w"> </span><span class="n">identifiers</span>
+</code></pre></div>
+
+<h4 id="key-features">Key Features</h4>
+<ul>
+<li><strong>Workflow Isolation</strong>: Each workflow has its own collection</li>
+<li><strong>Metadata Filtering</strong>: Documents tagged with workflow and file info</li>
+<li><strong>Similarity Search</strong>: Vector-based document retrieval</li>
+<li><strong>Persistence</strong>: Local file-based storage</li>
+</ul>
+<hr />
+<h2 id="ai-services-architecture">🤖 AI Services Architecture</h2>
+<h3 id="service-layer-servicesai_servicepy">Service Layer (<code>services/ai_service.py</code>)</h3>
+<h4 id="1-documentprocessor">1. <strong>DocumentProcessor</strong></h4>
+<p><strong>Role</strong>: PDF processing and text extraction<br />
+<strong>Key Functions</strong>:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">extract_text_from_pdf</span><span class="p">(</span><span class="n">file_path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">chunk_text</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">chunk_size</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">create_embeddings</span><span class="p">(</span><span class="n">texts</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">]]</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">process_document</span><span class="p">(</span><span class="n">file_path</span><span class="p">,</span> <span class="n">workflow_id</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span>
+</code></pre></div>
+
+<p><strong>Processing Pipeline</strong>:<br />
+1. PDF text extraction using PyPDF2<br />
+2. Text chunking with overlap for context preservation<br />
+3. Hash-based embedding generation (384 dimensions)<br />
+4. Vector storage in ChromaDB</p>
+<h4 id="2-chromadbservice">2. <strong>ChromaDBService</strong></h4>
+<p><strong>Role</strong>: Vector database management<br />
+<strong>Key Functions</strong>:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_or_create_collection</span><span class="p">(</span><span class="n">workflow_id</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Collection</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">add_documents</span><span class="p">(</span><span class="n">workflow_id</span><span class="p">,</span> <span class="n">documents</span><span class="p">,</span> <span class="n">embeddings</span><span class="p">,</span> <span class="n">metadata</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">search_similar</span><span class="p">(</span><span class="n">workflow_id</span><span class="p">,</span> <span class="n">query</span><span class="p">,</span> <span class="n">n_results</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]</span>
+</code></pre></div>
+
+<p><strong>Features</strong>:<br />
+- Automatic collection management<br />
+- Schema mismatch handling<br />
+- Local persistence<br />
+- Workflow-specific document isolation</p>
+<h4 id="3-llmservice">3. <strong>LLMService</strong></h4>
+<p><strong>Role</strong>: Multi-provider AI model integration<br />
+<strong>Supported Providers</strong>:<br />
+- OpenAI (GPT-3.5, GPT-4)<br />
+- Google Gemini (Gemini Pro, Gemini Flash)<br />
+- Anthropic (Claude-3)</p>
+<p><strong>Key Functions</strong>:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">generate_response</span><span class="p">(</span><span class="n">prompt</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">api_key</span><span class="p">,</span> <span class="n">provider</span><span class="p">,</span> 
+                     <span class="n">use_web_search</span><span class="p">,</span> <span class="n">serp_api_key</span><span class="p">,</span> <span class="n">custom_prompt</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span>
+</code></pre></div>
+
+<p><strong>Features</strong>:<br />
+- Provider-agnostic interface<br />
+- Context injection from knowledge base<br />
+- Web search integration via SerpAPI<br />
+- Custom prompt templates<br />
+- Fallback to mock responses when no API key</p>
+<h4 id="4-workflowengine">4. <strong>WorkflowEngine</strong></h4>
+<p><strong>Role</strong>: Workflow execution orchestration<br />
+<strong>Key Functions</strong>:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">execute_workflow</span><span class="p">(</span><span class="n">workflow_data</span><span class="p">,</span> <span class="n">query</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span>
+</code></pre></div>
+
+<p><strong>Execution Flow</strong>:<br />
+1. Parse workflow components (nodes/edges)<br />
+2. Determine execution path from Output node<br />
+3. Gather context from Knowledge Base nodes<br />
+4. Execute LLM with context and query<br />
+5. Return structured response with metadata</p>
+<hr />
+<h2 id="workflow-engine">⚙️ Workflow Engine</h2>
+<h3 id="workflow-structure">Workflow Structure</h3>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;components&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;nodes&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">      </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;node_1&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;userQuery&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;position&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;x&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">100</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;y&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">100</span><span class="p">},</span>
+<span class="w">        </span><span class="nt">&quot;data&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{}</span>
+<span class="w">      </span><span class="p">},</span>
+<span class="w">      </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;node_2&quot;</span><span class="p">,</span><span class="w"> </span>
+<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;knowledgeBase&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;position&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;x&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">300</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;y&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">100</span><span class="p">},</span>
+<span class="w">        </span><span class="nt">&quot;data&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{}</span>
+<span class="w">      </span><span class="p">},</span>
+<span class="w">      </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;node_3&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;llmEngine&quot;</span><span class="p">,</span><span class="w"> </span>
+<span class="w">        </span><span class="nt">&quot;position&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;x&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">500</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;y&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">100</span><span class="p">},</span>
+<span class="w">        </span><span class="nt">&quot;data&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">          </span><span class="nt">&quot;provider&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;openai&quot;</span><span class="p">,</span>
+<span class="w">          </span><span class="nt">&quot;model&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;gpt-3.5-turbo&quot;</span><span class="p">,</span>
+<span class="w">          </span><span class="nt">&quot;api_key&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;sk-...&quot;</span><span class="p">,</span>
+<span class="w">          </span><span class="nt">&quot;custom_prompt&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">      </span><span class="p">},</span>
+<span class="w">      </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;node_4&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;output&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;position&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;x&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">700</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;y&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">100</span><span class="p">},</span>
+<span class="w">        </span><span class="nt">&quot;data&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{}</span>
+<span class="w">      </span><span class="p">}</span>
+<span class="w">    </span><span class="p">],</span>
+<span class="w">    </span><span class="nt">&quot;edges&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">      </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;edge_1&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;source&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;node_1&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;target&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;node_3&quot;</span>
+<span class="w">      </span><span class="p">},</span>
+<span class="w">      </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;edge_2&quot;</span><span class="p">,</span><span class="w"> </span>
+<span class="w">        </span><span class="nt">&quot;source&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;node_2&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;target&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;node_3&quot;</span>
+<span class="w">      </span><span class="p">},</span>
+<span class="w">      </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;edge_3&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;source&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;node_3&quot;</span><span class="p">,</span><span class="w"> </span>
+<span class="w">        </span><span class="nt">&quot;target&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;node_4&quot;</span>
+<span class="w">      </span><span class="p">}</span>
+<span class="w">    </span><span class="p">]</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<h3 id="execution-logic">Execution Logic</h3>
+<ol>
+<li><strong>Path Resolution</strong>: Start from Output node, trace backwards</li>
+<li><strong>Context Gathering</strong>: Collect documents from Knowledge Base nodes</li>
+<li><strong>LLM Execution</strong>: Run configured AI model with context and query</li>
+<li><strong>Response Formatting</strong>: Structure response with metadata</li>
+</ol>
+<hr />
+<h2 id="vector-database-integration">🔍 Vector Database Integration</h2>
+<h3 id="chromadb-architecture">ChromaDB Architecture</h3>
+<h4 id="local-storage-structure">Local Storage Structure</h4>
+<div class="codehilite"><pre><span></span><code>chroma_db_new/
+├── chroma.sqlite3          # Metadata database
+├── index/                  # Vector index files
+└── embeddings/             # Embedding storage
+</code></pre></div>
+
+<h4 id="collection-management">Collection Management</h4>
+<ul>
+<li><strong>Naming Convention</strong>: <code>workflow_{workflow_id}</code></li>
+<li><strong>Isolation</strong>: Each workflow has independent collection</li>
+<li><strong>Persistence</strong>: Local file-based storage</li>
+<li><strong>Schema Handling</strong>: Automatic migration and reset capabilities</li>
+</ul>
+<h4 id="document-processing-pipeline">Document Processing Pipeline</h4>
+<ol>
+<li><strong>Upload</strong>: PDF file uploaded to backend</li>
+<li><strong>Extraction</strong>: Text extracted using PyPDF2</li>
+<li><strong>Chunking</strong>: Text split into overlapping chunks</li>
+<li><strong>Embedding</strong>: Hash-based vectors generated</li>
+<li><strong>Storage</strong>: Chunks and embeddings stored in ChromaDB</li>
+<li><strong>Metadata</strong>: File info and workflow association stored</li>
+</ol>
+<h4 id="search-functionality">Search Functionality</h4>
+<ul>
+<li><strong>Query Embedding</strong>: User query converted to vector</li>
+<li><strong>Similarity Search</strong>: Cosine similarity with stored documents</li>
+<li><strong>Context Retrieval</strong>: Top-k most similar documents returned</li>
+<li><strong>Metadata Filtering</strong>: Workflow-specific document isolation</li>
+</ul>
+<hr />
+<h2 id="authentication-security">🔐 Authentication &amp; Security</h2>
+<h3 id="clerk-integration">Clerk Integration</h3>
+<p><strong>Role</strong>: User authentication and session management<br />
+<strong>Features</strong>:<br />
+- Email/password authentication<br />
+- Social login providers<br />
+- Session management<br />
+- User profile data</p>
+<h3 id="security-measures">Security Measures</h3>
+<ul>
+<li><strong>CORS Configuration</strong>: Restricted origins</li>
+<li><strong>API Key Management</strong>: User-provided keys for AI services</li>
+<li><strong>File Upload Validation</strong>: PDF-only uploads</li>
+<li><strong>Workflow Isolation</strong>: User-specific data access</li>
+</ul>
+<hr />
+<h2 id="api-design">🌐 API Design</h2>
+<h3 id="restful-endpoints">RESTful Endpoints</h3>
+<h4 id="items-api">Items API</h4>
+<div class="codehilite"><pre><span></span><code><span class="err">GET    /items                    # List user&#39;s items</span>
+<span class="err">POST   /items                    # Create new item</span>
+<span class="err">GET    /items/{id}              # Get specific item</span>
+<span class="err">PUT    /items/{id}              # Update item</span>
+<span class="err">DELETE /items/{id}              # Delete item</span>
+</code></pre></div>
+
+<h4 id="workflows-api">Workflows API</h4>
+<div class="codehilite"><pre><span></span><code><span class="err">GET    /workflows               # List user&#39;s workflows</span>
+<span class="err">POST   /workflows               # Create workflow</span>
+<span class="err">GET    /workflows/{id}          # Get workflow</span>
+<span class="err">PUT    /workflows/{id}          # Update workflow</span>
+<span class="err">DELETE /workflows/{id}          # Delete workflow</span>
+</code></pre></div>
+
+<h4 id="documents-api">Documents API</h4>
+<div class="codehilite"><pre><span></span><code><span class="err">POST   /workflows/{id}/documents     # Upload document</span>
+<span class="err">GET    /workflows/{id}/documents     # List documents</span>
+<span class="err">DELETE /workflows/{id}/documents/{doc_id}  # Delete document</span>
+<span class="err">DELETE /workflows/{id}/documents/clear     # Clear all documents</span>
+</code></pre></div>
+
+<h4 id="execution-api">Execution API</h4>
+<div class="codehilite"><pre><span></span><code><span class="err">POST   /workflows/{id}/execute       # Execute workflow</span>
+<span class="err">GET    /workflows/{id}/conversations # Get chat history</span>
+</code></pre></div>
+
+<h3 id="requestresponse-patterns">Request/Response Patterns</h3>
+<h4 id="standard-response-format">Standard Response Format</h4>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;success&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;data&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="err">...</span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Operation successful&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2024-01-01T00:00:00Z&quot;</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<h4 id="error-response-format">Error Response Format</h4>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;success&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;error&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Error description&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;details&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="err">...</span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2024-01-01T00:00:00Z&quot;</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<hr />
+<h2 id="component-interactions">🔄 Component Interactions</h2>
+<h3 id="frontend-backend-communication">Frontend-Backend Communication</h3>
+<h4 id="1-dashboard-flow">1. <strong>Dashboard Flow</strong></h4>
+<div class="codehilite"><pre><span></span><code>Dashboard → API Service → Backend → Database
+     ↑                                    ↓
+     ←────────── Response ←───────────────┘
+</code></pre></div>
+
+<h4 id="2-workflow-builder-flow">2. <strong>Workflow Builder Flow</strong></h4>
+<div class="codehilite"><pre><span></span><code>WorkflowBuilder → React Flow → Node Components
+     ↓
+API Service → Backend → Workflow Engine
+     ↑                                    ↓
+     ←────────── Response ←───────────────┘
+</code></pre></div>
+
+<h4 id="3-document-processing-flow">3. <strong>Document Processing Flow</strong></h4>
+<div class="codehilite"><pre><span></span><code><span class="n">File</span><span class="w"> </span><span class="n">Upload</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="n">Backend</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="n">DocumentProcessor</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="n">ChromaDB</span>
+<span class="w">     </span><span class="err">↑</span><span class="w">                                              </span><span class="err">↓</span>
+<span class="w">     </span><span class="err">←──────────</span><span class="w"> </span><span class="n">Processing</span><span class="w"> </span><span class="n">Status</span><span class="w"> </span><span class="err">←───────────────┘</span>
+</code></pre></div>
+
+<h4 id="4-workflow-execution-flow">4. <strong>Workflow Execution Flow</strong></h4>
+<div class="codehilite"><pre><span></span><code>Chat Interface → Backend → Workflow Engine → LLM Service
+     ↑                                                    ↓
+     ←────────── AI Response ←────────────────────────────┘
+</code></pre></div>
+
+<h3 id="data-flow-patterns">Data Flow Patterns</h3>
+<h4 id="1-user-authentication">1. <strong>User Authentication</strong></h4>
+<ol>
+<li>Clerk handles authentication</li>
+<li>User data passed to backend via headers</li>
+<li>Backend validates user and associates data</li>
+</ol>
+<h4 id="2-workflow-creation">2. <strong>Workflow Creation</strong></h4>
+<ol>
+<li>User drags components in React Flow</li>
+<li>Components saved as JSON in database</li>
+<li>Workflow associated with specific item</li>
+</ol>
+<h4 id="3-document-processing">3. <strong>Document Processing</strong></h4>
+<ol>
+<li>PDF uploaded via multipart form</li>
+<li>Backend processes and chunks text</li>
+<li>Embeddings generated and stored in ChromaDB</li>
+<li>Document metadata saved in PostgreSQL</li>
+</ol>
+<h4 id="4-ai-query-processing">4. <strong>AI Query Processing</strong></h4>
+<ol>
+<li>User query sent to backend</li>
+<li>Workflow engine determines execution path</li>
+<li>Context retrieved from ChromaDB</li>
+<li>LLM called with context and query</li>
+<li>Response returned with metadata</li>
+</ol>
+<hr />
+<h2 id="deployment-architecture">🚀 Deployment Architecture</h2>
+<h3 id="development-environment">Development Environment</h3>
+<div class="codehilite"><pre><span></span><code><span class="err">┌─────────────────┐</span><span class="w">    </span><span class="err">┌─────────────────┐</span>
+<span class="err">│</span><span class="w">   </span><span class="n">Frontend</span><span class="w">      </span><span class="err">│</span><span class="w">    </span><span class="err">│</span><span class="w">    </span><span class="n">Backend</span><span class="w">      </span><span class="err">│</span>
+<span class="err">│</span><span class="w">   </span><span class="n">localhost</span><span class="p">:</span><span class="mi">3000</span><span class="err">│◄──►│</span><span class="w">  </span><span class="n">localhost</span><span class="p">:</span><span class="mi">8000</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">   </span><span class="p">(</span><span class="n">Vite</span><span class="w"> </span><span class="n">Dev</span><span class="p">)</span><span class="w">    </span><span class="err">│</span><span class="w">    </span><span class="err">│</span><span class="w">  </span><span class="p">(</span><span class="n">Uvicorn</span><span class="p">)</span><span class="w">      </span><span class="err">│</span>
+<span class="err">└─────────────────┘</span><span class="w">    </span><span class="err">└─────────────────┘</span>
+<span class="w">                              </span><span class="err">│</span>
+<span class="w">                              </span><span class="err">▼</span>
+<span class="w">                       </span><span class="err">┌─────────────────┐</span>
+<span class="w">                       </span><span class="err">│</span><span class="w">   </span><span class="n">Local</span><span class="w"> </span><span class="n">Files</span><span class="w">   </span><span class="err">│</span>
+<span class="w">                       </span><span class="err">│</span><span class="w">                 </span><span class="err">│</span>
+<span class="w">                       </span><span class="o">|</span><span class="err">•</span><span class="w"> </span><span class="n">PostgreSQL</span><span class="w"> </span><span class="n">DB</span><span class="w">  </span><span class="err">│</span>
+<span class="w">                       </span><span class="err">│</span><span class="w"> </span><span class="err">•</span><span class="w"> </span><span class="n">ChromaDB</span><span class="w">      </span><span class="err">│</span>
+<span class="w">                       </span><span class="err">│</span><span class="w"> </span><span class="err">•</span><span class="w"> </span><span class="n">Uploads</span><span class="w">       </span><span class="err">│</span>
+<span class="w">                       </span><span class="err">└─────────────────┘</span>
+</code></pre></div>
+
+<h3 id="production-environment">Production Environment</h3>
+<div class="codehilite"><pre><span></span><code>┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   CDN/Static    │    │   Load Balancer │    │   Application   │
+│   Frontend      │◄──►│   (Nginx)       │◄──►│   Servers       │
+│   (Built)       │    │                 │    │   (Gunicorn)    │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                                                       │
+                                                       ▼
+                                              ┌─────────────────┐
+                                              │   Database      │
+                                              │   Layer         │
+                                              │                 │
+                                              │ • PostgreSQL    │
+                                              │ • ChromaDB      │
+                                              │ • Object Storage│
+                                              └─────────────────┘
+</code></pre></div>
+
+<h3 id="scalability-considerations">Scalability Considerations</h3>
+<h4 id="horizontal-scaling">Horizontal Scaling</h4>
+<ul>
+<li><strong>Stateless Backend</strong>: FastAPI instances can be scaled horizontally</li>
+<li><strong>Database Separation</strong>: PostgreSQL for relational data, ChromaDB for vectors</li>
+<li><strong>File Storage</strong>: Object storage (S3) for document uploads</li>
+</ul>
+<h4 id="performance-optimization">Performance Optimization</h4>
+<ul>
+<li><strong>Caching</strong>: Redis for session and query caching</li>
+<li><strong>CDN</strong>: Static assets served via CDN</li>
+<li><strong>Database Indexing</strong>: Proper indexes on frequently queried fields</li>
+<li><strong>Vector Search</strong>: Optimized ChromaDB collections per workflow</li>
+</ul>
+<hr />
+<h2 id="configuration-management">🔧 Configuration Management</h2>
+<h3 id="environment-variables">Environment Variables</h3>
+<h4 id="backend-configuration">Backend Configuration</h4>
+<div class="codehilite"><pre><span></span><code><span class="err">#</span><span class="w"> </span><span class="k">Database</span>
+<span class="n">DATABASE_URL</span><span class="o">=</span><span class="nl">postgresql</span><span class="p">:</span><span class="o">//</span><span class="k">user</span><span class="err">:</span><span class="n">password</span><span class="nv">@localhost</span><span class="err">:</span><span class="mi">5432</span><span class="o">/</span><span class="n">workflow_studio</span>
+
+<span class="err">#</span><span class="w"> </span><span class="n">ChromaDB</span>
+<span class="n">CHROMA_API_KEY</span><span class="o">=</span><span class="n">your_chroma_api_key</span>
+<span class="n">CHROMA_HOST</span><span class="o">=</span><span class="n">your_chroma_host</span>
+<span class="n">CHROMA_USE_CLOUD</span><span class="o">=</span><span class="k">false</span>
+
+<span class="err">#</span><span class="w"> </span><span class="n">AI</span><span class="w"> </span><span class="n">Services</span><span class="w"> </span><span class="p">(</span><span class="n">Optional</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">can</span><span class="w"> </span><span class="n">be</span><span class="w"> </span><span class="n">provided</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">UI</span><span class="p">)</span>
+<span class="n">OPENAI_API_KEY</span><span class="o">=</span><span class="n">your_openai_key</span>
+<span class="n">ANTHROPIC_API_KEY</span><span class="o">=</span><span class="n">your_anthropic_key</span>
+
+<span class="err">#</span><span class="w"> </span><span class="n">Environment</span>
+<span class="n">ENVIRONMENT</span><span class="o">=</span><span class="n">development</span>
+</code></pre></div>
+
+<h4 id="frontend-configuration">Frontend Configuration</h4>
+<div class="codehilite"><pre><span></span><code><span class="gh">#</span> Clerk Authentication
+VITE_CLERK_PUBLISHABLE_KEY=pk_test_your_key
+
+<span class="gh">#</span> API Configuration
+VITE_API_BASE_URL=http://localhost:8000
+</code></pre></div>
+
+<hr />
+<h2 id="testing-strategy">🧪 Testing Strategy</h2>
+<h3 id="backend-testing">Backend Testing</h3>
+<ul>
+<li><strong>Unit Tests</strong>: Individual service functions</li>
+<li><strong>Integration Tests</strong>: API endpoint testing</li>
+<li><strong>Database Tests</strong>: ORM model validation</li>
+<li><strong>AI Service Tests</strong>: Mock LLM responses</li>
+</ul>
+<h3 id="frontend-testing">Frontend Testing</h3>
+<ul>
+<li><strong>Component Tests</strong>: React component testing</li>
+<li><strong>Integration Tests</strong>: User workflow testing</li>
+<li><strong>E2E Tests</strong>: Complete user journey testing</li>
+</ul>
+<hr />
+<h2 id="monitoring-logging">📊 Monitoring &amp; Logging</h2>
+<h3 id="application-monitoring">Application Monitoring</h3>
+<ul>
+<li><strong>Performance Metrics</strong>: Response times, throughput</li>
+<li><strong>Error Tracking</strong>: Exception monitoring</li>
+<li><strong>User Analytics</strong>: Workflow usage patterns</li>
+<li><strong>Resource Monitoring</strong>: Database, vector store performance</li>
+</ul>
+<h3 id="logging-strategy">Logging Strategy</h3>
+<ul>
+<li><strong>Structured Logging</strong>: JSON-formatted logs</li>
+<li><strong>Log Levels</strong>: DEBUG, INFO, WARNING, ERROR</li>
+<li><strong>Context Information</strong>: User ID, workflow ID, request ID</li>
+<li><strong>Performance Logging</strong>: Processing times, API call durations</li>
+</ul>
+<hr />
+<h2 id="future-enhancements">🔮 Future Enhancements</h2>
+<h3 id="planned-features">Planned Features</h3>
+<ol>
+<li><strong>Multi-User Collaboration</strong>: Shared workflows and documents</li>
+<li><strong>Advanced Workflow Nodes</strong>: Custom function nodes, conditional logic</li>
+<li><strong>Real-time Collaboration</strong>: Live workflow editing</li>
+<li><strong>Advanced Analytics</strong>: Workflow performance metrics</li>
+<li><strong>Mobile Support</strong>: Responsive mobile interface</li>
+<li><strong>Plugin System</strong>: Third-party node extensions</li>
+<li><strong>Advanced AI Features</strong>: Fine-tuning, custom models</li>
+<li><strong>Enterprise Features</strong>: SSO, RBAC, audit logs</li>
+</ol>
+<h3 id="technical-improvements">Technical Improvements</h3>
+<ol>
+<li><strong>Microservices Architecture</strong>: Service decomposition</li>
+<li><strong>Event-Driven Architecture</strong>: Async processing</li>
+<li><strong>Advanced Caching</strong>: Redis integration</li>
+<li><strong>Database Optimization</strong>: Connection pooling, query optimization</li>
+<li><strong>Security Enhancements</strong>: Rate limiting, input validation</li>
+<li><strong>Performance Optimization</strong>: Lazy loading, code splitting</li>
+</ol>
+<hr />
+<h2 id="additional-resources">📚 Additional Resources</h2>
+<h3 id="documentation">Documentation</h3>
+<ul>
+<li><a href="./API_DOCUMENTATION.md">API Documentation</a></li>
+<li><a href="./USER_GUIDE.md">User Guide</a></li>
+<li><a href="./DEVELOPER_GUIDE.md">Developer Guide</a></li>
+<li><a href="./DEPLOYMENT_GUIDE.md">Deployment Guide</a></li>
+</ul>
+<h3 id="code-organization">Code Organization</h3>
+<div class="codehilite"><pre><span></span><code><span class="nx">workflow</span><span class="o">-</span><span class="nx">studio</span><span class="o">/</span>
+<span class="err">├──</span><span class="w"> </span><span class="nx">backend</span><span class="o">/</span><span class="w">                 </span><span class="err">#</span><span class="w"> </span><span class="nx">FastAPI</span><span class="w"> </span><span class="nx">backend</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="nx">main</span><span class="p">.</span><span class="nx">py</span><span class="w">             </span><span class="err">#</span><span class="w"> </span><span class="nx">Application</span><span class="w"> </span><span class="nx">entry</span><span class="w"> </span><span class="nx">point</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="nx">database</span><span class="p">.</span><span class="nx">py</span><span class="w">         </span><span class="err">#</span><span class="w"> </span><span class="nx">Database</span><span class="w"> </span><span class="nx">models</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="nx">config</span><span class="p">.</span><span class="nx">py</span><span class="w">           </span><span class="err">#</span><span class="w"> </span><span class="nx">Configuration</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="nx">chroma_connection</span><span class="p">.</span><span class="nx">py</span><span class="w"> </span><span class="err">#</span><span class="w"> </span><span class="nx">Vector</span><span class="w"> </span><span class="nx">DB</span><span class="w"> </span><span class="nx">connection</span>
+<span class="err">│</span><span class="w">   </span><span class="err">└──</span><span class="w"> </span><span class="nx">services</span><span class="o">/</span><span class="w">           </span><span class="err">#</span><span class="w"> </span><span class="nx">Business</span><span class="w"> </span><span class="nx">logic</span>
+<span class="err">│</span><span class="w">       </span><span class="err">└──</span><span class="w"> </span><span class="nx">ai_service</span><span class="p">.</span><span class="nx">py</span><span class="w">   </span><span class="err">#</span><span class="w"> </span><span class="nx">AI</span><span class="w"> </span><span class="nx">services</span>
+<span class="err">├──</span><span class="w"> </span><span class="nx">frontend</span><span class="o">/</span><span class="w">               </span><span class="err">#</span><span class="w"> </span><span class="nx">React</span><span class="w"> </span><span class="nx">frontend</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="nx">src</span><span class="o">/</span>
+<span class="err">│</span><span class="w">   </span><span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="nx">App</span><span class="p">.</span><span class="nx">jsx</span><span class="w">         </span><span class="err">#</span><span class="w"> </span><span class="nx">Main</span><span class="w"> </span><span class="nx">application</span>
+<span class="err">│</span><span class="w">   </span><span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="nx">components</span><span class="o">/</span><span class="w">     </span><span class="err">#</span><span class="w"> </span><span class="nx">React</span><span class="w"> </span><span class="nx">components</span>
+<span class="err">│</span><span class="w">   </span><span class="err">│</span><span class="w">   </span><span class="err">└──</span><span class="w"> </span><span class="nx">services</span><span class="o">/</span><span class="w">       </span><span class="err">#</span><span class="w"> </span><span class="nx">API</span><span class="w"> </span><span class="nx">services</span>
+<span class="err">│</span><span class="w">   </span><span class="err">└──</span><span class="w"> </span><span class="kn">package</span><span class="p">.</span><span class="nx">json</span><span class="w">        </span><span class="err">#</span><span class="w"> </span><span class="nx">Dependencies</span>
+<span class="err">└──</span><span class="w"> </span><span class="nx">README</span><span class="p">.</span><span class="nx">md</span><span class="w">              </span><span class="err">#</span><span class="w"> </span><span class="nx">Project</span><span class="w"> </span><span class="nx">overview</span>
+</code></pre></div>
+
+<hr />
+<h2 id="detailed-component-documentation">📋 Detailed Component Documentation</h2>
+<h3 id="backend-components">Backend Components</h3>
+<h4 id="1-main-application-mainpy_1">1. <strong>Main Application (<code>main.py</code>)</strong></h4>
+<ul>
+<li><strong>Role</strong>: FastAPI application entry point and API routing</li>
+<li><strong>Key Endpoints</strong>: Items, Workflows, Documents, Execution, ChromaDB management</li>
+<li><strong>Features</strong>: CORS middleware, file upload handling, database session management</li>
+</ul>
+<h4 id="2-database-layer-databasepy_1">2. <strong>Database Layer (<code>database.py</code>)</strong></h4>
+<ul>
+<li><strong>Role</strong>: SQLAlchemy ORM models and database configuration</li>
+<li><strong>Models</strong>: Item, Workflow, Conversation, Document</li>
+<li><strong>Features</strong>: UUID primary keys, audit trails, JSON storage for workflow components</li>
+</ul>
+<h4 id="3-configuration-configpy_1">3. <strong>Configuration (<code>config.py</code>)</strong></h4>
+<ul>
+<li><strong>Role</strong>: Environment-based configuration management</li>
+<li><strong>Settings</strong>: Database URLs, ChromaDB config, API keys, environment detection</li>
+</ul>
+<h4 id="4-chromadb-connection-chroma_connectionpy">4. <strong>ChromaDB Connection (<code>chroma_connection.py</code>)</strong></h4>
+<ul>
+<li><strong>Role</strong>: Vector database connection management</li>
+<li><strong>Features</strong>: Singleton client pattern, local storage, dependency injection</li>
+</ul>
+<h3 id="frontend-components">Frontend Components</h3>
+<h4 id="1-application-entry-appjsx_1">1. <strong>Application Entry (<code>App.jsx</code>)</strong></h4>
+<ul>
+<li><strong>Role</strong>: Main application component with routing and authentication</li>
+<li><strong>Features</strong>: Clerk authentication, React Router, protected routes</li>
+</ul>
+<h4 id="2-dashboard-dashboardjsx_1">2. <strong>Dashboard (<code>Dashboard.jsx</code>)</strong></h4>
+<ul>
+<li><strong>Role</strong>: Main user interface for task management</li>
+<li><strong>Features</strong>: Item CRUD operations, statistics, user profile, navigation</li>
+</ul>
+<h4 id="3-workflow-builder-workflowbuilderjsx_1">3. <strong>Workflow Builder (<code>WorkflowBuilder.jsx</code>)</strong></h4>
+<ul>
+<li><strong>Role</strong>: Visual workflow construction interface</li>
+<li><strong>Features</strong>: React Flow integration, drag-and-drop, node configuration, chat interface</li>
+</ul>
+<h4 id="4-api-service-layer-apijs">4. <strong>API Service Layer (<code>api.js</code>)</strong></h4>
+<ul>
+<li><strong>Role</strong>: Centralized API communication</li>
+<li><strong>Services</strong>: Items, Workflows, Documents, Execution APIs</li>
+</ul>
+<h3 id="ai-service-components">AI Service Components</h3>
+<h4 id="1-document-processor">1. <strong>Document Processor</strong></h4>
+<ul>
+<li><strong>Role</strong>: PDF processing and text extraction</li>
+<li><strong>Pipeline</strong>: PDF extraction → Text chunking → Embedding generation → Vector storage</li>
+</ul>
+<h4 id="2-chromadb-service">2. <strong>ChromaDB Service</strong></h4>
+<ul>
+<li><strong>Role</strong>: Vector database management</li>
+<li><strong>Features</strong>: Collection management, document storage, similarity search</li>
+</ul>
+<h4 id="3-llm-service">3. <strong>LLM Service</strong></h4>
+<ul>
+<li><strong>Role</strong>: Multi-provider AI model integration</li>
+<li><strong>Providers</strong>: OpenAI, Google Gemini, Anthropic</li>
+<li><strong>Features</strong>: Context injection, web search, custom prompts</li>
+</ul>
+<h4 id="4-workflow-engine">4. <strong>Workflow Engine</strong></h4>
+<ul>
+<li><strong>Role</strong>: Workflow execution orchestration</li>
+<li><strong>Logic</strong>: Path resolution → Context gathering → LLM execution → Response formatting</li>
+</ul>
+<h3 id="workflow-nodes">Workflow Nodes</h3>
+<h4 id="1-user-query-node">1. <strong>User Query Node</strong></h4>
+<ul>
+<li>Entry point for user questions</li>
+<li>No configuration required</li>
+</ul>
+<h4 id="2-knowledge-base-node">2. <strong>Knowledge Base Node</strong></h4>
+<ul>
+<li>Document management and vector search</li>
+<li>Upload interface and context retrieval</li>
+</ul>
+<h4 id="3-llm-engine-node">3. <strong>LLM Engine Node</strong></h4>
+<ul>
+<li>AI model configuration and execution</li>
+<li>Provider selection, API keys, custom prompts</li>
+</ul>
+<h4 id="4-output-node">4. <strong>Output Node</strong></h4>
+<ul>
+<li>Response display and chat interface</li>
+<li>Conversation history and metadata</li>
+</ul>
+<h3 id="data-flow-patterns_1">Data Flow Patterns</h3>
+<h4 id="1-user-authentication_1">1. <strong>User Authentication</strong></h4>
+<p>Clerk Auth → Frontend → Backend Headers → User Validation</p>
+<h4 id="2-workflow-creation_1">2. <strong>Workflow Creation</strong></h4>
+<p>React Flow → Node Configuration → API Save → Database Storage</p>
+<h4 id="3-document-processing_1">3. <strong>Document Processing</strong></h4>
+<p>File Upload → Backend → PDF Processing → ChromaDB Storage → Metadata Update</p>
+<h4 id="4-workflow-execution">4. <strong>Workflow Execution</strong></h4>
+<p>User Query → Workflow Engine → Context Retrieval → LLM Call → Response Display</p>
+<h3 id="key-features_1">Key Features</h3>
+<h4 id="backend">Backend</h4>
+<ul>
+<li>RESTful API with FastAPI</li>
+<li>PostgreSQL database with SQLAlchemy ORM</li>
+<li>ChromaDB vector database integration</li>
+<li>Multi-LLM provider support</li>
+<li>Document processing pipeline</li>
+</ul>
+<h4 id="frontend">Frontend</h4>
+<ul>
+<li>React 19 with modern hooks</li>
+<li>React Flow for visual workflow building</li>
+<li>Clerk authentication integration</li>
+<li>Tailwind CSS for styling</li>
+<li>Real-time chat interface</li>
+</ul>
+<h4 id="ai-services">AI Services</h4>
+<ul>
+<li>PDF text extraction and chunking</li>
+<li>Hash-based embedding generation</li>
+<li>Vector similarity search</li>
+<li>Multi-provider LLM integration</li>
+<li>Web search capabilities</li>
+</ul>
+<hr />
+<p><em>This documentation provides a comprehensive overview of the Workflow Studio architecture and all its components. For specific implementation details, refer to the individual code files and comments.</em></p>
+    </body>
+    </html>
+    
