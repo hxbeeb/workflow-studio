@@ -58,6 +58,9 @@ class ItemResponse(ItemBase):
 
     class Config:
         from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat() if v else None
+        }
 
 class WorkflowCreate(BaseModel):
     name: str
@@ -80,6 +83,9 @@ class WorkflowResponse(WorkflowCreate):
 
     class Config:
         from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat() if v else None
+        }
 
 class QueryRequest(BaseModel):
     query: str
@@ -110,7 +116,24 @@ def root():
 async def get_all_items(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get all items for the current user"""
     items = db.query(Item).filter(Item.user_id == current_user["id"]).all()
-    return items
+    
+    # Convert SQLAlchemy objects to dictionaries, excluding _sa_instance_state
+    item_dicts = []
+    for item in items:
+        item_dict = {
+            'id': item.id,
+            'user_id': item.user_id,
+            'title': item.title,
+            'description': item.description,
+            'status': item.status,
+            'priority': item.priority,
+            'type': item.type,
+            'created_at': item.created_at,
+            'updated_at': item.updated_at
+        }
+        item_dicts.append(item_dict)
+    
+    return item_dicts
 
 @app.post("/items", response_model=ItemResponse, status_code=status.HTTP_201_CREATED)
 async def create_item(item: ItemCreate, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -130,7 +153,18 @@ async def create_item(item: ItemCreate, current_user: dict = Depends(get_current
         db.commit()
         db.refresh(db_item)
         
-        return db_item
+        # Convert to dictionary
+        return {
+            'id': db_item.id,
+            'user_id': db_item.user_id,
+            'title': db_item.title,
+            'description': db_item.description,
+            'status': db_item.status,
+            'priority': db_item.priority,
+            'type': db_item.type,
+            'created_at': db_item.created_at,
+            'updated_at': db_item.updated_at
+        }
         
     except Exception as e:
         db.rollback()
@@ -142,7 +176,19 @@ async def get_item(item_id: str, current_user: dict = Depends(get_current_user),
     item = db.query(Item).filter(Item.id == item_id, Item.user_id == current_user["id"]).first()
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
-    return item
+    
+    # Convert to dictionary
+    return {
+        'id': item.id,
+        'user_id': item.user_id,
+        'title': item.title,
+        'description': item.description,
+        'status': item.status,
+        'priority': item.priority,
+        'type': item.type,
+        'created_at': item.created_at,
+        'updated_at': item.updated_at
+    }
 
 @app.put("/items/{item_id}", response_model=ItemResponse)
 async def update_item(item_id: str, item_update: ItemUpdate, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -158,7 +204,19 @@ async def update_item(item_id: str, item_update: ItemUpdate, current_user: dict 
     item.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(item)
-    return item
+    
+    # Convert to dictionary
+    return {
+        'id': item.id,
+        'user_id': item.user_id,
+        'title': item.title,
+        'description': item.description,
+        'status': item.status,
+        'priority': item.priority,
+        'type': item.type,
+        'created_at': item.created_at,
+        'updated_at': item.updated_at
+    }
 
 @app.delete("/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_item(item_id: str, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -176,7 +234,24 @@ async def delete_item(item_id: str, current_user: dict = Depends(get_current_use
 async def get_workflows(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get all workflows for the current user"""
     workflows = db.query(Workflow).filter(Workflow.user_id == current_user["id"]).all()
-    return workflows
+    
+    # Convert SQLAlchemy objects to dictionaries
+    workflow_dicts = []
+    for workflow in workflows:
+        workflow_dict = {
+            'id': workflow.id,
+            'user_id': workflow.user_id,
+            'item_id': workflow.item_id,
+            'name': workflow.name,
+            'description': workflow.description,
+            'components': workflow.components,
+            'is_active': workflow.is_active,
+            'created_at': workflow.created_at,
+            'updated_at': workflow.updated_at
+        }
+        workflow_dicts.append(workflow_dict)
+    
+    return workflow_dicts
 
 @app.post("/workflows", response_model=WorkflowResponse, status_code=status.HTTP_201_CREATED)
 async def create_workflow(workflow_data: Dict[str, Any], current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -208,7 +283,19 @@ async def create_workflow(workflow_data: Dict[str, Any], current_user: dict = De
         db.commit()
         db.refresh(db_workflow)
         print(f"Created workflow with ID: {db_workflow.id}")
-        return db_workflow
+        
+        # Convert to dictionary
+        return {
+            'id': db_workflow.id,
+            'user_id': db_workflow.user_id,
+            'item_id': db_workflow.item_id,
+            'name': db_workflow.name,
+            'description': db_workflow.description,
+            'components': db_workflow.components,
+            'is_active': db_workflow.is_active,
+            'created_at': db_workflow.created_at,
+            'updated_at': db_workflow.updated_at
+        }
     except Exception as e:
         print(f"Error creating workflow: {e}")
         db.rollback()
@@ -220,7 +307,19 @@ async def get_workflow(workflow_id: str, current_user: dict = Depends(get_curren
     workflow = db.query(Workflow).filter(Workflow.id == workflow_id, Workflow.user_id == current_user["id"]).first()
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    return workflow
+    
+    # Convert to dictionary
+    return {
+        'id': workflow.id,
+        'user_id': workflow.user_id,
+        'item_id': workflow.item_id,
+        'name': workflow.name,
+        'description': workflow.description,
+        'components': workflow.components,
+        'is_active': workflow.is_active,
+        'created_at': workflow.created_at,
+        'updated_at': workflow.updated_at
+    }
 
 @app.put("/workflows/{workflow_id}", response_model=WorkflowResponse)
 async def update_workflow(
@@ -258,7 +357,19 @@ async def update_workflow(
         db.commit()
         db.refresh(workflow)
         print(f"Workflow updated successfully")
-        return workflow
+        
+        # Convert to dictionary
+        return {
+            'id': workflow.id,
+            'user_id': workflow.user_id,
+            'item_id': workflow.item_id,
+            'name': workflow.name,
+            'description': workflow.description,
+            'components': workflow.components,
+            'is_active': workflow.is_active,
+            'created_at': workflow.created_at,
+            'updated_at': workflow.updated_at
+        }
     except Exception as e:
         print(f"Error updating workflow: {e}")
         import traceback
@@ -290,6 +401,9 @@ async def upload_document(
     workflow = db.query(Workflow).filter(Workflow.id == workflow_id, Workflow.user_id == current_user["id"]).first()
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
+    
+    # Ensure uploads directory exists
+    os.makedirs("uploads", exist_ok=True)
     
     # Save file
     file_path = f"uploads/{workflow_id}_{file.filename}"
@@ -327,46 +441,24 @@ async def upload_document(
             db.add(db_document)
             db.commit()
             
-            # Add to ChromaDB collection using workflow-specific collection
-            from chroma_connection import get_chroma_client
-            client = get_chroma_client()
-            collection_name = f"workflow_{workflow_id}"
-            print(f"Uploading to ChromaDB collection: {collection_name}")
+            # Add to ChromaDB using the vector_store service
+            print(f"Adding {len(processed_data['chunks'])} chunks to ChromaDB for workflow: {workflow_id}")
             
             try:
-                collection = client.get_or_create_collection(collection_name)
-                print(f"Successfully got/created collection: {collection_name}")
-            except Exception as collection_error:
-                print(f"Error getting/creating collection: {collection_error}")
+                # Use the vector_store service to add documents
+                metadata = [{"workflow_id": workflow_id, "filename": file.filename} for _ in processed_data["chunks"]]
+                ids = vector_store.add_documents(
+                    workflow_id=workflow_id,
+                    documents=processed_data["chunks"],
+                    embeddings=processed_data["embeddings"],
+                    metadata=metadata
+                )
+                print(f"Successfully added {len(ids)} documents to ChromaDB with IDs: {ids[:3]}...")
+            except Exception as chroma_error:
+                print(f"Error adding to ChromaDB: {chroma_error}")
                 import traceback
                 traceback.print_exc()
                 raise
-            
-            # Check collection before adding
-            try:
-                before_count = collection.count()
-                print(f"Collection has {before_count} documents before upload")
-            except Exception as e:
-                print(f"Error getting collection count: {e}")
-            
-            ids = [str(uuid.uuid4()) for _ in processed_data["chunks"]]
-            print(f"Adding {len(processed_data['chunks'])} chunks with IDs: {ids[:3]}...")  # Show first 3 IDs
-            
-            collection.add(
-                documents=processed_data["chunks"],
-                embeddings=processed_data["embeddings"],
-                metadatas=[{"workflow_id": workflow_id, "filename": file.filename} for _ in processed_data["chunks"]],
-                ids=ids
-            )
-            
-            # Check collection after adding
-            try:
-                after_count = collection.count()
-                print(f"Collection has {after_count} documents after upload")
-            except Exception as e:
-                print(f"Error getting collection count after upload: {e}")
-            
-            print(f"Successfully added {len(processed_data['chunks'])} chunks to ChromaDB collection '{collection_name}'")
             
             return {
                 "success": True,
@@ -459,6 +551,40 @@ async def test_chroma():
             "success": True,
             "message": "ChromaDB connection successful",
             "collections": [col.name for col in collections]
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.post("/test-chroma-add")
+async def test_chroma_add():
+    """Test adding documents to ChromaDB"""
+    try:
+        # Test with a simple document
+        test_workflow_id = "test-workflow-123"
+        test_documents = ["This is a test document for ChromaDB"]
+        test_embeddings = [[0.1, 0.2, 0.3, 0.4, 0.5] * 76]  # 384 dimensions
+        test_metadata = [{"workflow_id": test_workflow_id, "filename": "test.pdf"}]
+        
+        # Use the vector_store service
+        ids = vector_store.add_documents(
+            workflow_id=test_workflow_id,
+            documents=test_documents,
+            embeddings=test_embeddings,
+            metadata=test_metadata
+        )
+        
+        # Check if documents were added
+        collection = vector_store.get_or_create_collection(test_workflow_id)
+        count = collection.count()
+        
+        return {
+            "success": True,
+            "message": "Test document added successfully",
+            "ids": ids,
+            "collection_count": count
         }
     except Exception as e:
         return {

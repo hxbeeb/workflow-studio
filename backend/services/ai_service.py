@@ -3,7 +3,7 @@ import shutil
 import os
 import uuid
 import time
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 import PyPDF2
 import numpy as np
 from config import Config
@@ -12,7 +12,7 @@ from database import Document
 
 # Simple hash-based embeddings to avoid compilation issues
 import hashlib
-import numpy as np
+import math
 
 class DocumentProcessor:
     def __init__(self):
@@ -68,7 +68,7 @@ class DocumentProcessor:
             embedding = embedding[:dim]
             
             # Normalize to unit vector
-            norm = np.linalg.norm(embedding)
+            norm = math.sqrt(sum(x * x for x in embedding))
             if norm > 0:
                 embedding = [x / norm for x in embedding]
             
@@ -105,11 +105,19 @@ class ChromaDBService:
                 print(f"ChromaDB Cloud initialization error: {e}")
                 # Fallback to local if cloud fails
                 print("Falling back to local ChromaDB")
-                self.client = chromadb.PersistentClient(path=Config.CHROMA_LOCAL_PATH)
+                from chromadb.config import Settings
+                self.client = chromadb.Client(Settings(
+                    persist_directory=Config.CHROMA_LOCAL_PATH,
+                    chroma_db_impl="duckdb+parquet"
+                ))
         else:
             # Use local ChromaDB with better error handling
             try:
-                self.client = chromadb.PersistentClient(path=Config.CHROMA_LOCAL_PATH)
+                from chromadb.config import Settings
+                self.client = chromadb.Client(Settings(
+                    persist_directory=Config.CHROMA_LOCAL_PATH,
+                    chroma_db_impl="duckdb+parquet"
+                ))
                 # Test the connection
                 _ = self.client.list_collections()
                 print("Using local ChromaDB")
@@ -123,7 +131,11 @@ class ChromaDBService:
                         import shutil
                         if os.path.exists(Config.CHROMA_LOCAL_PATH):
                             shutil.rmtree(Config.CHROMA_LOCAL_PATH, ignore_errors=True)
-                        self.client = chromadb.PersistentClient(path=Config.CHROMA_LOCAL_PATH)
+                        from chromadb.config import Settings
+                        self.client = chromadb.Client(Settings(
+                            persist_directory=Config.CHROMA_LOCAL_PATH,
+                            chroma_db_impl="duckdb+parquet"
+                        ))
                         print("ChromaDB local store reset completed.")
                     except Exception as reset_err:
                         print(f"Failed to reset ChromaDB local store: {reset_err}")
@@ -135,41 +147,78 @@ class ChromaDBService:
     
     def get_or_create_collection(self, workflow_id: str):
         """Get or create a collection for a workflow"""
+        collection_name = f"workflow_{workflow_id}"
+        print(f"Getting or creating collection: {collection_name}")
+        
         if workflow_id not in self.collections:
             try:
-                collection = self.client.get_collection(name=f"workflow_{workflow_id}")
+                print(f"Trying to get existing collection: {collection_name}")
+                collection = self.client.get_collection(name=collection_name)
+                print(f"Successfully got existing collection: {collection_name}")
             except Exception as e:
+                print(f"Collection {collection_name} not found, creating new one: {e}")
                 try:
-                    collection = self.client.create_collection(name=f"workflow_{workflow_id}")
+                    collection = self.client.create_collection(name=collection_name)
+                    print(f"Successfully created new collection: {collection_name}")
                 except Exception as ce:
+                    print(f"Error creating collection {collection_name}: {ce}")
                     # Handle local schema mismatch by resetting store and retrying once
                     if "no such column" in str(e) or "no such column" in str(ce):
                         print("ChromaDB collection access failed due to schema mismatch. Resetting local store and retrying once...")
                         try:
                             shutil.rmtree(Config.CHROMA_LOCAL_PATH, ignore_errors=True)
-                            self.client = chromadb.PersistentClient(path=Config.CHROMA_LOCAL_PATH)
-                            collection = self.client.get_or_create_collection(name=f"workflow_{workflow_id}")
+                            from chromadb.config import Settings
+                            self.client = chromadb.Client(Settings(
+                                persist_directory=Config.CHROMA_LOCAL_PATH,
+                                chroma_db_impl="duckdb+parquet"
+                            ))
+                            collection = self.client.get_or_create_collection(name=collection_name)
+                            print(f"Successfully created collection after reset: {collection_name}")
                         except Exception as retry_err:
                             print(f"Retry after reset failed (collection): {retry_err}")
                             raise
                     else:
                         raise
             self.collections[workflow_id] = collection
+        else:
+            print(f"Using cached collection: {collection_name}")
+        
         return self.collections[workflow_id]
     
     def add_documents(self, workflow_id: str, documents: List[str], embeddings: List[List[float]], metadata: List[Dict] = None):
         """Add documents to the knowledge base"""
+        print(f"Adding {len(documents)} documents to workflow {workflow_id}")
         collection = self.get_or_create_collection(workflow_id)
         # Generate IDs for documents
         ids = [str(uuid.uuid4()) for _ in documents]
+        print(f"Generated IDs: {ids[:3]}...")
         
         def _do_add():
+            print(f"Adding documents to collection with {len(documents)} chunks")
+            print(f"First document sample: {documents[0][:100]}..." if documents else "No documents")
+            print(f"First embedding sample: {embeddings[0][:5]}..." if embeddings else "No embeddings")
+            print(f"First metadata sample: {metadata[0] if metadata else 'No metadata'}")
+            print(f"First ID sample: {ids[0] if ids else 'No IDs'}")
+            
             collection.add(
                 documents=documents,
                 embeddings=embeddings,
                 metadatas=metadata or [{"workflow_id": workflow_id} for _ in documents],
                 ids=ids
             )
+            print(f"Documents added to collection successfully")
+            
+            # Persist changes to disk
+            print("Persisting changes to disk...")
+            self.client.persist()
+            print(f"Successfully added and persisted {len(documents)} documents")
+            
+            # Verify the documents were added
+            try:
+                count_after = collection.count()
+                print(f"Collection count after adding: {count_after}")
+            except Exception as count_error:
+                print(f"Error getting count after adding: {count_error}")
         
         try:
             _do_add()
@@ -179,7 +228,11 @@ class ChromaDBService:
                 print("ChromaDB add failed due to schema mismatch. Resetting local store and retrying once...")
                 try:
                     shutil.rmtree(Config.CHROMA_LOCAL_PATH, ignore_errors=True)
-                    self.client = chromadb.PersistentClient(path=Config.CHROMA_LOCAL_PATH)
+                    from chromadb.config import Settings
+                    self.client = chromadb.Client(Settings(
+                        persist_directory=Config.CHROMA_LOCAL_PATH,
+                        chroma_db_impl="duckdb+parquet"
+                    ))
                     # Re-obtain collection and retry
                     collection = self.get_or_create_collection(workflow_id)
                     _do_add()
@@ -225,7 +278,7 @@ class ChromaDBService:
             query_embedding = query_embedding[:dim]
             
             # Normalize to unit vector
-            query_norm = np.linalg.norm(query_embedding)
+            query_norm = math.sqrt(sum(x * x for x in query_embedding))
             if query_norm > 0:
                 query_embedding = [x / query_norm for x in query_embedding]
             
@@ -245,14 +298,40 @@ class ChromaDBService:
             print(f"Error during search: {e}")
             return []
         
-        # Format results
+        # Format results - handle different response formats
         formatted_results = []
-        for i in range(len(results['documents'][0])):
-            formatted_results.append({
-                'document': results['documents'][0][i],
-                'metadata': results['metadatas'][0][i],
-                'distance': results['distances'][0][i]
-            })
+        try:
+            # Check if results have the expected structure
+            if 'documents' in results and results['documents']:
+                documents = results['documents']
+                metadatas = results.get('metadatas', [])
+                distances = results.get('distances', [])
+                
+                # Handle both list and nested list formats
+                if isinstance(documents, list) and len(documents) > 0:
+                    if isinstance(documents[0], list):
+                        # Nested list format: documents[0] contains the actual documents
+                        doc_list = documents[0]
+                        meta_list = metadatas[0] if metadatas and len(metadatas) > 0 else []
+                        dist_list = distances[0] if distances and len(distances) > 0 else []
+                    else:
+                        # Flat list format
+                        doc_list = documents
+                        meta_list = metadatas
+                        dist_list = distances
+                    
+                    for i in range(len(doc_list)):
+                        formatted_results.append({
+                            'document': doc_list[i],
+                            'metadata': meta_list[i] if i < len(meta_list) else {},
+                            'distance': dist_list[i] if i < len(dist_list) else 0.0
+                        })
+            else:
+                print("No documents found in search results")
+        except Exception as e:
+            print(f"Error formatting search results: {e}")
+            # Return empty results if formatting fails
+            return []
         
         return formatted_results
 
@@ -260,7 +339,7 @@ class LLMService:
     def __init__(self):
         self.available_models = ["gpt-4", "gpt-3.5-turbo", "claude-3"]
     
-    def generate_response(self, prompt: str, context: List[str] = None, model: str = "gpt-3.5-turbo", api_key: str = None, provider: str = "openai", use_web_search: bool = False, serp_api_key: str = None) -> Dict[str, Any]:
+    def generate_response(self, prompt: str, context: List[str] = None, model: str = "gpt-3.5-turbo", api_key: str = None, provider: str = "openai", use_web_search: bool = False, serp_api_key: str = None, custom_prompt: str = None) -> Dict[str, Any]:
         """Generate response using LLM with user-provided API key and optional web search"""
         start_time = time.time()
         
@@ -274,12 +353,15 @@ class LLMService:
                 print(f"Web search error: {e}")
                 web_search_results = []
         
-        # Combine context, web search results, and prompt
+        # Combine context, web search results, custom prompt, and user prompt
         full_prompt = ""
         if context:
             full_prompt += "Context from Knowledge Base:\n" + "\n".join(context) + "\n\n"
         if web_search_results:
             full_prompt += "Web Search Results:\n" + "\n".join(web_search_results) + "\n\n"
+        if custom_prompt and custom_prompt.strip():
+            print(f"Using custom prompt: {custom_prompt.strip()}")
+            full_prompt += f"Custom Instructions:\n{custom_prompt.strip()}\n\n"
         full_prompt += f"Question: {prompt}\n\nAnswer:"
         
         # Check if API key is provided
@@ -381,120 +463,115 @@ class LLMService:
             response = model_client.generate_content(prompt)
             print("Gemini response received")
             
-            # Handle response with multiple parts
+            # Simplified text extraction for newer versions of google-generativeai
             print(f"Response type: {type(response)}")
-            print(f"Response attributes: {dir(response)}")
             
-            # Try the most direct approach first - use the response's text property
+            # Method 1: Try response.parts (newer API)
             try:
-                # For newer versions of google-generativeai, try direct text access
-                if hasattr(response, 'text') and callable(getattr(response, 'text', None)):
-                    text = response.text
-                    if text:
-                        print(f"Successfully extracted text using response.text(): {text[:100]}...")
-                        return text
-            except Exception as e:
-                print(f"Direct text() method failed: {e}")
-            
-            try:
-                # Try the simple text accessor first
-                text = response.text
-                if text:
-                    print(f"Successfully extracted text: {text[:100]}...")
-                    return text
-            except Exception as e:
-                print(f"Simple text accessor failed: {e}")
-            
-            # Fallback: extract from parts
-            try:
-                if hasattr(response, 'candidates') and response.candidates:
-                    print(f"Found {len(response.candidates)} candidates")
-                    for i, candidate in enumerate(response.candidates):
-                        print(f"Processing candidate {i}: {type(candidate)}")
-                        print(f"Candidate attributes: {dir(candidate)}")
-                        
-                        if hasattr(candidate, 'content'):
-                            print(f"Candidate content type: {type(candidate.content)}")
-                            print(f"Candidate content attributes: {dir(candidate.content)}")
-                            
-                            if hasattr(candidate.content, 'parts'):
-                                text_parts = []
-                                for j, part in enumerate(candidate.content.parts):
-                                    print(f"Processing part {j}: {type(part)}")
-                                    print(f"Part attributes: {dir(part)}")
-                                    if hasattr(part, 'text'):
-                                        text_parts.append(part.text)
-                                        print(f"Added text: {part.text[:50]}...")
-                                if text_parts:
-                                    result = ' '.join(text_parts)
-                                    print(f"Successfully extracted from parts: {result[:100]}...")
-                                    return result
-            except Exception as e:
-                print(f"Parts extraction failed: {e}")
-                import traceback
-                traceback.print_exc()
-            
-            # Try to get response content directly
-            try:
-                if hasattr(response, 'content'):
-                    print("Trying response.content")
-                    if hasattr(response.content, 'parts'):
-                        text_parts = []
-                        for part in response.content.parts:
-                            if hasattr(part, 'text'):
-                                text_parts.append(part.text)
-                        if text_parts:
-                            result = ' '.join(text_parts)
-                            print(f"Successfully extracted from response.content: {result[:100]}...")
+                if hasattr(response, 'parts'):
+                    parts = response.parts
+                    if parts:
+                        all_text = []
+                        for part in parts:
+                            if hasattr(part, 'text') and part.text:
+                                all_text.append(part.text)
+                        if all_text:
+                            result = ' '.join(all_text)
+                            print(f"Successfully extracted text using response.parts: {result[:100]}...")
                             return result
             except Exception as e:
-                print(f"Response.content extraction failed: {e}")
+                print(f"response.parts failed: {e}")
             
-            # Try direct access to response text property
+            # Method 2: Try response.text directly (most common)
             try:
                 if hasattr(response, 'text'):
                     text = response.text
-                    if text:
-                        print(f"Successfully extracted using response.text: {text[:100]}...")
+                    if text and text.strip():
+                        print(f"Successfully extracted text using response.text: {text[:100]}...")
                         return text
             except Exception as e:
-                print(f"Direct text access failed: {e}")
+                print(f"response.text failed: {e}")
             
-            # Try to access the first candidate's text directly
+            # Method 3: Try to call response.text() if it's a method
+            try:
+                if hasattr(response, 'text') and callable(getattr(response, 'text', None)):
+                    text = response.text()
+                    if text and text.strip():
+                        print(f"Successfully extracted text using response.text(): {text[:100]}...")
+                        return text
+            except Exception as e:
+                print(f"response.text() failed: {e}")
+            
+            # Method 4: Try response.candidates[0].content.parts[0].text
             try:
                 if hasattr(response, 'candidates') and response.candidates:
-                    first_candidate = response.candidates[0]
-                    if hasattr(first_candidate, 'text'):
-                        text = first_candidate.text
-                        if text:
-                            print(f"Successfully extracted using first_candidate.text: {text[:100]}...")
-                            return text
+                    candidate = response.candidates[0]
+                    if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                        parts = candidate.content.parts
+                        if parts and hasattr(parts[0], 'text'):
+                            text = parts[0].text
+                            if text and text.strip():
+                                print(f"Successfully extracted text from candidate: {text[:100]}...")
+                                return text
             except Exception as e:
-                print(f"First candidate text access failed: {e}")
+                print(f"candidate.content.parts failed: {e}")
             
-            # Try to access the response as a string and parse it
+            # Method 5: Try to get all text from all parts
+            try:
+                if hasattr(response, 'candidates') and response.candidates:
+                    all_text = []
+                    for candidate in response.candidates:
+                        if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                            for part in candidate.content.parts:
+                                if hasattr(part, 'text') and part.text:
+                                    all_text.append(part.text)
+                    if all_text:
+                        result = ' '.join(all_text)
+                        print(f"Successfully extracted text from all parts: {result[:100]}...")
+                        return result
+            except Exception as e:
+                print(f"all parts extraction failed: {e}")
+            
+            # Method 4: Try to convert response to string and extract
             try:
                 response_str = str(response)
                 print(f"Response as string: {response_str[:200]}...")
                 
-                # Try multiple regex patterns to extract text
+                # Simple regex to find text content
                 import re
-                patterns = [
-                    r'text["\']?\s*:\s*["\']([^"\']+)["\']',
-                    r'content["\']?\s*:\s*["\']([^"\']+)["\']',
-                    r'parts["\']?\s*:\s*\[["\']([^"\']+)["\']',
+                # Look for text patterns in the response
+                text_patterns = [
+                    r'"text":\s*"([^"]+)"',
+                    r"'text':\s*'([^']+)'",
+                    r'text:\s*"([^"]+)"',
+                    r'text:\s*\'([^\']+)\''
                 ]
                 
-                for pattern in patterns:
+                for pattern in text_patterns:
                     matches = re.findall(pattern, response_str)
                     if matches:
                         result = ' '.join(matches)
-                        print(f"Successfully extracted using regex pattern: {result[:100]}...")
+                        print(f"Successfully extracted using regex: {result[:100]}...")
                         return result
+                
+                # If no text found with regex, try to extract the entire response content
+                # This handles cases where the response is a direct string
+                if response_str and response_str.strip():
+                    # Remove any wrapper text and return the actual content
+                    # Look for JSON-like content
+                    json_match = re.search(r'\{.*\}', response_str, re.DOTALL)
+                    if json_match:
+                        return json_match.group(0)
+                    
+                    # If no JSON found, return the cleaned string
+                    cleaned_response = response_str.strip()
+                    if cleaned_response and len(cleaned_response) > 10:  # Ensure it's not just whitespace
+                        return cleaned_response
+                        
             except Exception as e:
                 print(f"String parsing failed: {e}")
             
-            # Final fallback - return a more informative error
+            # Final fallback - return error with response info
             print(f"All extraction methods failed. Response type: {type(response)}")
             print(f"Response attributes: {dir(response)}")
             return f"Error: Could not extract text from Gemini response. Response type: {type(response)}"
@@ -732,13 +809,14 @@ class WorkflowEngine:
                 api_key = node_data.get('api_key')
                 use_web_search = node_data.get('use_web_search', False)
                 serp_api_key = node_data.get('serp_api_key', '')
+                custom_prompt = node_data.get('custom_prompt', '')
 
                 # Normalize model for provider
                 valid_models = self._valid_models_for_provider(provider)
                 if not model or model not in valid_models:
                     model = self._default_model_for_provider(provider)
 
-                result = self.llm_service.generate_response(query, context, model, api_key, provider, use_web_search, serp_api_key)
+                result = self.llm_service.generate_response(query, context, model, api_key, provider, use_web_search, serp_api_key, custom_prompt)
 
                 return {
                     "success": True,
