@@ -10,21 +10,24 @@ from config import Config
 from chroma_connection import get_chroma_client
 from database import Document
 
-# Make sentence-transformers optional to avoid heavy build deps (Rust/tokenizers)
+# Use scikit-learn for simple embeddings to avoid heavy compilation
 try:
-    from sentence_transformers import SentenceTransformer
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+    import numpy as np
+    HAS_SKLEARN = True
 except Exception:
-    SentenceTransformer = None
+    HAS_SKLEARN = False
 
 class DocumentProcessor:
     def __init__(self):
-        # Initialize embedding model if available; otherwise fall back later
-        self.embedding_model = None
-        if SentenceTransformer is not None:
+        # Initialize TF-IDF vectorizer for simple embeddings
+        self.vectorizer = None
+        if HAS_SKLEARN:
             try:
-                self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+                self.vectorizer = TfidfVectorizer(max_features=384, stop_words='english')
             except Exception:
-                self.embedding_model = None
+                self.vectorizer = None
     
     def extract_text_from_pdf(self, file_path: str) -> str:
         """Extract text from PDF file using PyPDF2"""
@@ -50,13 +53,27 @@ class DocumentProcessor:
         return chunks
     
     def create_embeddings(self, texts: List[str]) -> List[List[float]]:
-        """Create embeddings for text chunks"""
-        if self.embedding_model is None:
+        """Create TF-IDF embeddings for text chunks"""
+        if self.vectorizer is None:
             # Fallback: deterministic dummy vectors so pipeline can proceed
             dim = 384
             return [[0.0] * dim for _ in texts]
-        embeddings = self.embedding_model.encode(texts)
-        return embeddings.tolist()
+        
+        try:
+            # Fit and transform the texts
+            tfidf_matrix = self.vectorizer.fit_transform(texts)
+            # Convert to dense array and normalize
+            embeddings = tfidf_matrix.toarray()
+            # Normalize to unit vectors
+            norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+            norms[norms == 0] = 1  # Avoid division by zero
+            embeddings = embeddings / norms
+            return embeddings.tolist()
+        except Exception as e:
+            print(f"Error creating TF-IDF embeddings: {e}")
+            # Fallback: deterministic dummy vectors
+            dim = 384
+            return [[0.0] * dim for _ in texts]
     
     def process_document(self, file_path: str, workflow_id: str) -> Dict[str, Any]:
         """Process document and return chunks and embeddings"""
@@ -185,17 +202,31 @@ class ChromaDBService:
         except Exception as e:
             print(f"Error getting collection count: {e}")
         
-        # Create query embedding
-        if SentenceTransformer is None:
-            # Without embeddings support, skip semantic search
-            print("SentenceTransformer not available, skipping search")
+        # Create query embedding using TF-IDF
+        if not HAS_SKLEARN:
+            # Without sklearn support, skip semantic search
+            print("scikit-learn not available, skipping search")
             return []
+        
         try:
-            embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+            # Create a simple TF-IDF vectorizer for the query
+            query_vectorizer = TfidfVectorizer(max_features=384, stop_words='english')
+            # Get all documents in the collection for fitting
+            all_docs = collection.get()['documents']
+            if not all_docs:
+                return []
+            
+            # Fit on all documents and transform query
+            query_vectorizer.fit(all_docs)
+            query_embedding = query_vectorizer.transform([query]).toarray()[0]
+            # Normalize query vector
+            query_norm = np.linalg.norm(query_embedding)
+            if query_norm > 0:
+                query_embedding = query_embedding / query_norm
+            query_embedding = [query_embedding.tolist()]
         except Exception as e:
-            print(f"Error loading embedding model: {e}")
+            print(f"Error creating query embedding: {e}")
             return []
-        query_embedding = embedding_model.encode([query]).tolist()
         
         # Search
         try:
