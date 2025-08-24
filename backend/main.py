@@ -846,8 +846,9 @@ async def get_conversations(
     conversations = db.query(Conversation).filter(Conversation.workflow_id == workflow_id).order_by(Conversation.created_at.desc()).all()
     return conversations
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
 
+if __name__ == "__main__":
+    import uvicorn, os
+    port = int(os.environ.get("PORT", 8000))  # fallback to 8000 locally
+    uvicorn.run(app, host="0.0.0.0", port=port)
 
