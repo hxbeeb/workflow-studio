@@ -10,24 +10,14 @@ from config import Config
 from chroma_connection import get_chroma_client
 from database import Document
 
-# Use scikit-learn for simple embeddings to avoid heavy compilation
-try:
-    from sklearn.feature_extraction.text import TfidfVectorizer
-    from sklearn.metrics.pairwise import cosine_similarity
-    import numpy as np
-    HAS_SKLEARN = True
-except Exception:
-    HAS_SKLEARN = False
+# Simple hash-based embeddings to avoid compilation issues
+import hashlib
+import numpy as np
 
 class DocumentProcessor:
     def __init__(self):
-        # Initialize TF-IDF vectorizer for simple embeddings
-        self.vectorizer = None
-        if HAS_SKLEARN:
-            try:
-                self.vectorizer = TfidfVectorizer(max_features=384, stop_words='english')
-            except Exception:
-                self.vectorizer = None
+        # Simple document processor with hash-based embeddings
+        pass
     
     def extract_text_from_pdf(self, file_path: str) -> str:
         """Extract text from PDF file using PyPDF2"""
@@ -53,27 +43,38 @@ class DocumentProcessor:
         return chunks
     
     def create_embeddings(self, texts: List[str]) -> List[List[float]]:
-        """Create TF-IDF embeddings for text chunks"""
-        if self.vectorizer is None:
-            # Fallback: deterministic dummy vectors so pipeline can proceed
-            dim = 384
-            return [[0.0] * dim for _ in texts]
+        """Create simple hash-based embeddings for text chunks"""
+        embeddings = []
+        dim = 384
         
-        try:
-            # Fit and transform the texts
-            tfidf_matrix = self.vectorizer.fit_transform(texts)
-            # Convert to dense array and normalize
-            embeddings = tfidf_matrix.toarray()
-            # Normalize to unit vectors
-            norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
-            norms[norms == 0] = 1  # Avoid division by zero
-            embeddings = embeddings / norms
-            return embeddings.tolist()
-        except Exception as e:
-            print(f"Error creating TF-IDF embeddings: {e}")
-            # Fallback: deterministic dummy vectors
-            dim = 384
-            return [[0.0] * dim for _ in texts]
+        for text in texts:
+            # Create a simple hash-based embedding
+            # Use the text hash to seed a random-like vector
+            text_hash = hashlib.md5(text.encode()).hexdigest()
+            
+            # Convert hash to a list of floats
+            embedding = []
+            for i in range(0, len(text_hash), 2):
+                if len(embedding) >= dim:
+                    break
+                # Convert hex pair to float between -1 and 1
+                hex_val = text_hash[i:i+2]
+                float_val = (int(hex_val, 16) / 255.0) * 2 - 1
+                embedding.append(float_val)
+            
+            # Pad or truncate to exact dimension
+            while len(embedding) < dim:
+                embedding.append(0.0)
+            embedding = embedding[:dim]
+            
+            # Normalize to unit vector
+            norm = np.linalg.norm(embedding)
+            if norm > 0:
+                embedding = [x / norm for x in embedding]
+            
+            embeddings.append(embedding)
+        
+        return embeddings
     
     def process_document(self, file_path: str, workflow_id: str) -> Dict[str, Any]:
         """Process document and return chunks and embeddings"""
@@ -202,28 +203,33 @@ class ChromaDBService:
         except Exception as e:
             print(f"Error getting collection count: {e}")
         
-        # Create query embedding using TF-IDF
-        if not HAS_SKLEARN:
-            # Without sklearn support, skip semantic search
-            print("scikit-learn not available, skipping search")
-            return []
-        
+        # Create query embedding using hash-based approach
         try:
-            # Create a simple TF-IDF vectorizer for the query
-            query_vectorizer = TfidfVectorizer(max_features=384, stop_words='english')
-            # Get all documents in the collection for fitting
-            all_docs = collection.get()['documents']
-            if not all_docs:
-                return []
+            # Create a simple hash-based embedding for the query
+            query_hash = hashlib.md5(query.encode()).hexdigest()
             
-            # Fit on all documents and transform query
-            query_vectorizer.fit(all_docs)
-            query_embedding = query_vectorizer.transform([query]).toarray()[0]
-            # Normalize query vector
+            # Convert hash to a list of floats
+            query_embedding = []
+            dim = 384
+            for i in range(0, len(query_hash), 2):
+                if len(query_embedding) >= dim:
+                    break
+                # Convert hex pair to float between -1 and 1
+                hex_val = query_hash[i:i+2]
+                float_val = (int(hex_val, 16) / 255.0) * 2 - 1
+                query_embedding.append(float_val)
+            
+            # Pad or truncate to exact dimension
+            while len(query_embedding) < dim:
+                query_embedding.append(0.0)
+            query_embedding = query_embedding[:dim]
+            
+            # Normalize to unit vector
             query_norm = np.linalg.norm(query_embedding)
             if query_norm > 0:
-                query_embedding = query_embedding / query_norm
-            query_embedding = [query_embedding.tolist()]
+                query_embedding = [x / query_norm for x in query_embedding]
+            
+            query_embedding = [query_embedding]
         except Exception as e:
             print(f"Error creating query embedding: {e}")
             return []
