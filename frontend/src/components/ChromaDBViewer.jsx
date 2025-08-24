@@ -9,7 +9,7 @@ const ChromaDBViewer = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('http://localhost:8000/chroma-dashboard');
+      const response = await fetch('https://workflow-studio.onrender.com/chroma-dashboard');
       const data = await response.json();
       setDashboardData(data);
     } catch (err) {
@@ -25,7 +25,7 @@ const ChromaDBViewer = () => {
     }
     
     try {
-      const response = await fetch(`http://localhost:8000/chroma-collections/${collectionName}`, {
+      const response = await fetch(`https://workflow-studio.onrender.com/chroma-collections/${collectionName}`, {
         method: 'DELETE'
       });
       const result = await response.json();

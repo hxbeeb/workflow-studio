@@ -4,7 +4,7 @@ import os
 import uuid
 import time
 from typing import List, Dict, Any, Optional
-import fitz  # PyMuPDF
+import PyPDF2
 import numpy as np
 from config import Config
 from chroma_connection import get_chroma_client
@@ -27,13 +27,13 @@ class DocumentProcessor:
                 self.embedding_model = None
     
     def extract_text_from_pdf(self, file_path: str) -> str:
-        """Extract text from PDF file"""
+        """Extract text from PDF file using PyPDF2"""
         try:
-            doc = fitz.open(file_path)
-            text = ""
-            for page in doc:
-                text += page.get_text()
-            doc.close()
+            with open(file_path, 'rb') as file:
+                pdf_reader = PyPDF2.PdfReader(file)
+                text = ""
+                for page in pdf_reader.pages:
+                    text += page.extract_text()
             return text
         except Exception as e:
             raise Exception(f"Error extracting text from PDF: {str(e)}")
